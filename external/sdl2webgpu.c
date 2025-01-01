@@ -16,6 +16,12 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
 
+#ifdef __EMSCRIPTEN__
+    #include <emscripten.h>
+    #include <emscripten/html5.h>
+    #include <emscripten/html5_webgpu.h>
+#endif
+
 WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
 {
     SDL_SysWMinfo windowWMInfo;
@@ -137,18 +143,15 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
     }
 #elif defined(SDL_VIDEO_DRIVER_EMSCRIPTEN)
     {
-        WGPUSurfaceSourceCanvasHTMLSelector_Emscripten fromCanvasHTMLSelector;
-        fromCanvasHTMLSelector.chain.sType = WGPUSType_SurfaceSourceCanvasHTMLSelector_Emscripten;
-        fromCanvasHTMLSelector.chain.next  = NULL;
-        fromCanvasHTMLSelector.selector    = "canvas";
+        WGPUSurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
+        fromCanvasHTMLSelector.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+
+        fromCanvasHTMLSelector.chain.next = NULL;
+        fromCanvasHTMLSelector.selector   = "canvas";
 
         WGPUSurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector.chain;
-
-        WGPUStringView view;
-        view.data               = "test";
-        view.length             = 4;
-        surfaceDescriptor.label = view;
+        surfaceDescriptor.label       = NULL;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
     }
