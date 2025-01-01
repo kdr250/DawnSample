@@ -6,9 +6,7 @@
 int main(int argc, char* argv[])
 {
     // Init WebGPU
-    WGPUInstanceDescriptor desc {};
-    desc.nextInChain      = NULL;
-    WGPUInstance instance = wgpuCreateInstance(&desc);
+    WGPUInstance instance = wgpuCreateInstance(nullptr);
     if (instance == nullptr)
     {
         SDL_Log("Instance creation failed!");
