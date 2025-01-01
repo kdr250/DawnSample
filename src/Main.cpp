@@ -1,59 +1,60 @@
-#include <dawn/webgpu_cpp_print.h>
-#include <webgpu/webgpu_cpp.h>
+#include <SDL2/SDL.h>
+#include <webgpu/webgpu.h>
 
-#include <cstdlib>
-#include <iostream>
+#include "sdl2webgpu.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    wgpu::InstanceDescriptor instanceDescriptor {};
-    instanceDescriptor.features.timedWaitAnyEnable = true;
-    wgpu::Instance instance                        = wgpu::CreateInstance(&instanceDescriptor);
+    // Init WebGPU
+    WGPUInstanceDescriptor desc {};
+    desc.nextInChain      = NULL;
+    WGPUInstance instance = wgpuCreateInstance(&desc);
     if (instance == nullptr)
     {
-        std::cerr << "Instance creation failed!" << std::endl;
+        SDL_Log("Instance creation failed!");
         return EXIT_FAILURE;
     }
 
-    // Synchronously request the adapter.
-    wgpu::RequestAdapterOptions options = {};
-    wgpu::Adapter adapter;
-    wgpu::RequestAdapterCallbackInfo callbackInfo = {};
-    callbackInfo.nextInChain                      = nullptr;
-    callbackInfo.mode                             = wgpu::CallbackMode::WaitAnyOnly;
+    // Init SDL
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow("Dawn Sample",
+                                          SDL_WINDOWPOS_UNDEFINED,
+                                          SDL_WINDOWPOS_UNDEFINED,
+                                          1024,
+                                          768,
+                                          0);
 
-    callbackInfo.callback = [](WGPURequestAdapterStatus status,
-                               WGPUAdapter adapter,
-                               WGPUStringView message,
-                               void *userdata)
+    // Create WebGPU surface
+    WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
+
+    // Main loop
+    bool isRunning = true;
+    while (isRunning)
     {
-        if (status != WGPURequestAdapterStatus_Success)
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
         {
-            std::cerr << "Failed to get an adapter:" << message.data;
-            return;
-        }
-        *static_cast<wgpu::Adapter *>(userdata) = wgpu::Adapter::Acquire(adapter);
-    };
-    callbackInfo.userdata = &adapter;
+            switch (event.type)
+            {
+                case SDL_QUIT:
+                    isRunning = false;
+                    break;
 
-    instance.WaitAny(instance.RequestAdapter(&options, callbackInfo), UINT64_MAX);
-    if (adapter == nullptr)
-    {
-        std::cerr << "RequestAdapter failed!\n";
-        return EXIT_FAILURE;
+                default:
+                    break;
+            }
+        }
+
+        const Uint8* state = SDL_GetKeyboardState(NULL);
+        if (state[SDL_SCANCODE_ESCAPE])
+        {
+            isRunning = false;
+        }
     }
 
-    wgpu::DawnAdapterPropertiesPowerPreference power_props {};
+    // Terminate SDL
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 
-    wgpu::AdapterInfo info {};
-    info.nextInChain = &power_props;
-
-    adapter.GetInfo(&info);
-    std::cout << "VendorID: " << std::hex << info.vendorID << std::dec << std::endl;
-    std::cout << "Vendor: " << info.vendor << std::endl;
-    std::cout << "Architecture: " << info.architecture << std::endl;
-    std::cout << "DeviceID: " << std::hex << info.deviceID << std::dec << std::endl;
-    std::cout << "Name: " << info.device << std::endl;
-    std::cout << "Driver description: " << info.description << std::endl;
     return EXIT_SUCCESS;
 }
