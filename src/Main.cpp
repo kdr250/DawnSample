@@ -25,6 +25,24 @@ WGPUAdapter RequestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions 
     };
     UserData userData;
 
+#ifdef __EMSCRIPTEN__
+    auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status,
+                                    WGPUAdapter adapter,
+                                    const char* message,
+                                    void* pUserData)
+    {
+        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
+        if (status == WGPURequestAdapterStatus_Success)
+        {
+            userData.adapter = adapter;
+        }
+        else
+        {
+            SDL_Log("Could not get WebGPU adapter: %s", message);
+        }
+        userData.requestEnded = true;
+    };
+#else
     auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status,
                                     WGPUAdapter adapter,
                                     WGPUStringView message,
@@ -41,6 +59,7 @@ WGPUAdapter RequestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions 
         }
         userData.requestEnded = true;
     };
+#endif
 
     wgpuInstanceRequestAdapter(instance, options, onAdapterRequestEnded, (void*)&userData);
 
@@ -71,7 +90,6 @@ void InspectAdapter(WGPUAdapter adapter)
         SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.limits.maxTextureDimension3D);
         SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
     }
-#endif
 
     WGPUSupportedFeatures features;
     wgpuAdapterGetFeatures(adapter, &features);
@@ -108,6 +126,7 @@ void InspectAdapter(WGPUAdapter adapter)
     }
     SDL_Log(" - adapterType: 0x%08X", info.adapterType);
     SDL_Log(" - backendType: 0x%08X", info.backendType);
+#endif
 }
 
 void Quit()
