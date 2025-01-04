@@ -19,6 +19,8 @@ public:
     bool IsRunning();
 
 private:
+    WGPUTextureView GetNextSurfaceTextureView();
+
     SDL_Window* window;
     WGPUDevice device;
     WGPUQueue queue;

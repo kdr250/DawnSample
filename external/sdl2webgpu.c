@@ -46,8 +46,8 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
 
         WGPUStringView view;
-        view.data               = "test";
-        view.length             = 4;
+        view.data               = "SDL2 WebGPU Surface";
+        view.length             = 19;
         surfaceDescriptor.label = view;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
@@ -72,8 +72,8 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
 
         WGPUStringView view;
-        view.data               = "test";
-        view.length             = 4;
+        view.data               = "SDL2 WebGPU Surface";
+        view.length             = 19;
         surfaceDescriptor.label = view;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
@@ -93,8 +93,8 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         surfaceDescriptor.nextInChain = &fromXlibWindow.chain;
 
         WGPUStringView view;
-        view.data               = "test";
-        view.length             = 4;
+        view.data               = "SDL2 WebGPU Surface";
+        view.length             = 19;
         surfaceDescriptor.label = view;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
@@ -114,8 +114,8 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
 
         WGPUStringView view;
-        view.data               = "test";
-        view.length             = 4;
+        view.data               = "SDL2 WebGPU Surface";
+        view.length             = 19;
         surfaceDescriptor.label = view;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
@@ -135,8 +135,8 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         surfaceDescriptor.nextInChain = &fromWindowsHWND.chain;
 
         WGPUStringView view;
-        view.data               = "test";
-        view.length             = 4;
+        view.data               = "SDL2 WebGPU Surface";
+        view.length             = 19;
         surfaceDescriptor.label = view;
 
         return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
