@@ -7,13 +7,22 @@
     #include <emscripten/html5_webgpu.h>
 #endif
 
+#include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
 SDL_Window* window;
+WGPUInstance instance;
+WGPUAdapter adapter;
+WGPUSurface surface;
 bool isRunning = true;
 
 void Quit()
 {
+    // Terminate WebGPU
+    wgpuSurfaceRelease(surface);
+    wgpuAdapterRelease(adapter);
+    wgpuInstanceRelease(instance);
+
     // Terminate SDL
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -54,7 +63,7 @@ void MainLoop()
 int main(int argc, char* argv[])
 {
     // Init WebGPU
-    WGPUInstance instance = wgpuCreateInstance(nullptr);
+    instance = wgpuCreateInstance(nullptr);
     if (instance == nullptr)
     {
         SDL_Log("Instance creation failed!");
@@ -70,8 +79,15 @@ int main(int argc, char* argv[])
                               768,
                               0);
 
+    // Requesting Adapter
+    WGPURequestAdapterOptions adapterOptions = {};
+    adapterOptions.nextInChain               = nullptr;
+    adapter = WebGPUUtils::RequestAdapterSync(instance, &adapterOptions);
+
+    WebGPUUtils::InspectAdapter(adapter);
+
     // Create WebGPU surface
-    WGPUSurface surface = SDL_GetWGPUSurface(instance, window);
+    surface = SDL_GetWGPUSurface(instance, window);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(MainLoop, 0, 1);
