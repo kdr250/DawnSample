@@ -14,6 +14,7 @@ SDL_Window* window;
 WGPUInstance instance;
 WGPUAdapter adapter;
 WGPUDevice device;
+WGPUQueue queue;
 WGPUSurface surface;
 bool isRunning = true;
 
@@ -21,6 +22,7 @@ void Quit()
 {
     // Terminate WebGPU
     wgpuSurfaceRelease(surface);
+    wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
 
     // Terminate SDL
@@ -124,11 +126,11 @@ int main(int argc, char* argv[])
         }
     };
 #else
-    deviceDesc.label.data                          = "My Device";
+    deviceDesc.label                               = {"My Device", WGPU_STRLEN};
     deviceDesc.requiredFeatureCount                = 0;
     deviceDesc.requiredLimits                      = nullptr;
     deviceDesc.defaultQueue.nextInChain            = nullptr;
-    deviceDesc.defaultQueue.label.data             = "The default queue";
+    deviceDesc.defaultQueue.label                  = {"The default queue", WGPU_STRLEN};
     deviceDesc.deviceLostCallbackInfo2.nextInChain = nullptr;
     deviceDesc.deviceLostCallbackInfo2.mode        = WGPUCallbackMode_WaitAnyOnly;
     deviceDesc.deviceLostCallbackInfo2.callback    = [](const WGPUDevice* device,
@@ -173,8 +175,60 @@ int main(int argc, char* argv[])
 
     wgpuAdapterRelease(adapter);
 
+    queue = wgpuDeviceGetQueue(device);
+
     // Create WebGPU surface
     surface = SDL_GetWGPUSurface(instance, window);
+
+    // Queue
+    auto onQueueWorkDone = [](WGPUQueueWorkDoneStatus status, void* /* pUserData */)
+    {
+        SDL_Log("Queue work finished with status: 0x%08X", status);
+    };
+    wgpuQueueOnSubmittedWorkDone(queue, onQueueWorkDone, nullptr);
+
+    WGPUCommandEncoderDescriptor encoderDesc = {};
+    encoderDesc.nextInChain                  = nullptr;
+#ifdef __EMSCRIPTEN__
+    encoderDesc.label = "My command encoder";
+#else
+    encoderDesc.label = {"My command encoder", WGPU_STRLEN};
+#endif
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+
+#ifdef __EMSCRIPTEN__
+    wgpuCommandEncoderInsertDebugMarker(encoder, "Do one thing");
+    wgpuCommandEncoderInsertDebugMarker(encoder, "Do another thing");
+#else
+    wgpuCommandEncoderInsertDebugMarker(encoder, {"Do one thing", WGPU_STRLEN});
+    wgpuCommandEncoderInsertDebugMarker(encoder, {"Do another thing", WGPU_STRLEN});
+#endif
+
+    WGPUCommandBufferDescriptor cmdBufferDescripter = {};
+    cmdBufferDescripter.nextInChain                 = nullptr;
+#ifdef __EMSCRIPTEN__
+    cmdBufferDescripter.label = "Command buffer";
+#else
+    cmdBufferDescripter.label = {"Command buffer", WGPU_STRLEN};
+#endif
+
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescripter);
+
+    wgpuCommandEncoderRelease(encoder);
+
+    // Submit the command queue
+    wgpuQueueSubmit(queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+
+    for (int i = 0; i < 5; ++i)
+    {
+        SDL_Log("Tick/Poll device...");
+#ifdef __EMSCRIPTEN__
+        emscripten_sleep(100);
+#else
+        wgpuDeviceTick(device);
+#endif
+    }
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(MainLoop, 0, 1);
