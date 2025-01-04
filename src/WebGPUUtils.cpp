@@ -70,6 +70,64 @@ WGPUAdapter WebGPUUtils::RequestAdapterSync(WGPUInstance instance,
     return userData.adapter;
 }
 
+WGPUDevice WebGPUUtils::RequestDeviceSync(WGPUAdapter adapter,
+                                          WGPUDeviceDescriptor const* descripter)
+{
+    struct UserData
+    {
+        WGPUDevice device = nullptr;
+        bool requestEnded = false;
+    };
+    UserData userData;
+
+#ifdef __EMSCRIPTEN__
+    auto onDeviceRequestEnded =
+        [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* pUserData)
+    {
+        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
+        if (status == WGPURequestDeviceStatus_Success)
+        {
+            userData.device = device;
+        }
+        else
+        {
+            SDL_Log("Could not get WebGPU device: %s", message);
+        }
+        userData.requestEnded = true;
+    };
+#else
+    auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status,
+                                   WGPUDevice device,
+                                   WGPUStringView message,
+                                   void* pUserData)
+    {
+        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
+        if (status == WGPURequestDeviceStatus_Success)
+        {
+            userData.device = device;
+        }
+        else
+        {
+            SDL_Log("Could not get WebGPU device: %s", message.data);
+        }
+        userData.requestEnded = true;
+    };
+#endif
+
+    wgpuAdapterRequestDevice(adapter, descripter, onDeviceRequestEnded, (void*)&userData);
+
+#ifdef __EMSCRIPTEN__
+    while (!userData.requestEnded)
+    {
+        emscripten_sleep(100);
+    }
+#endif
+
+    assert(userData.requestEnded);
+
+    return userData.device;
+}
+
 void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
 {
 #ifdef __EMSCRIPTEN__
@@ -164,5 +222,58 @@ void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
     }
     SDL_Log(" - adapterType: 0x%08X", info.adapterType);
     SDL_Log(" - backendType: 0x%08X", info.backendType);
+#endif
+}
+
+void WebGPUUtils::InspectDevice(WGPUDevice device)
+{
+#ifdef __EMSCRIPTEN__
+    std::vector<WGPUFeatureName> features;
+    size_t featureCount = wgpuDeviceEnumerateFeatures(device, nullptr);
+    features.resize(featureCount);
+    wgpuDeviceEnumerateFeatures(device, features.data());
+
+    SDL_Log("Device features:");
+    for (auto feature : features)
+    {
+        SDL_Log(" - 0x%08X", feature);
+    }
+
+    WGPUSupportedLimits supportedLimits = {};
+    supportedLimits.nextInChain         = nullptr;
+
+    bool success = wgpuDeviceGetLimits(device, &supportedLimits);
+
+    if (success)
+    {
+        SDL_Log("Device limits:");
+        SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.limits.maxTextureDimension1D);
+        SDL_Log(" - maxTextureDimension2D: %d", supportedLimits.limits.maxTextureDimension2D);
+        SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.limits.maxTextureDimension3D);
+        SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
+    }
+#else
+    WGPUSupportedFeatures features;
+    wgpuDeviceGetFeatures(device, &features);
+
+    SDL_Log("Device features:");
+    for (int i = 0; i < features.featureCount; ++i)
+    {
+        auto feature = features.features[i];
+        SDL_Log(" - 0x%08X", feature);
+    }
+
+    WGPUSupportedLimits supportedLimits = {};
+    supportedLimits.nextInChain         = nullptr;
+    WGPUStatus status                   = wgpuDeviceGetLimits(device, &supportedLimits);
+
+    if (status == WGPUStatus_Success)
+    {
+        SDL_Log("Device limits:");
+        SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.limits.maxTextureDimension1D);
+        SDL_Log(" - maxTextureDimension2D: %d", supportedLimits.limits.maxTextureDimension2D);
+        SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.limits.maxTextureDimension3D);
+        SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
+    }
 #endif
 }
