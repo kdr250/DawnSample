@@ -1,6 +1,7 @@
 #include <SDL2/SDL.h>
 #include <webgpu/webgpu.h>
 #include <cassert>
+#include <vector>
 
 #ifdef __EMSCRIPTEN__
     #include <emscripten.h>
@@ -77,7 +78,50 @@ WGPUAdapter RequestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions 
 
 void InspectAdapter(WGPUAdapter adapter)
 {
-#ifndef __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
+    std::vector<WGPUFeatureName> features;
+
+    // Call the function a first time with a null return address, just to get
+    // the entry count.
+    size_t featureCount = wgpuAdapterEnumerateFeatures(adapter, nullptr);
+
+    // Allocate memory (could be a new, or a malloc() if this were a C program)
+    features.resize(featureCount);
+
+    // Call the function a second time, with a non-null return address
+    wgpuAdapterEnumerateFeatures(adapter, features.data());
+
+    SDL_Log("Adapter features:");
+    for (auto feature : features)
+    {
+        SDL_Log(" - 0x%08X", feature);
+    }
+
+    WGPUAdapterProperties properties = {};
+    properties.nextInChain           = nullptr;
+    wgpuAdapterGetProperties(adapter, &properties);
+    SDL_Log("Adapter properties:");
+    SDL_Log(" - vendorID: %i", properties.vendorID);
+    if (properties.vendorName)
+    {
+        SDL_Log(" - vendorName: %s", properties.vendorName);
+    }
+    if (properties.architecture)
+    {
+        SDL_Log(" - architecture: %s", properties.architecture);
+    }
+    SDL_Log(" - deviceID: %i", properties.deviceID);
+    if (properties.name)
+    {
+        SDL_Log(" - name: %s", properties.name);
+    }
+    if (properties.driverDescription)
+    {
+        SDL_Log(" - driverDescription: %s", properties.driverDescription);
+    }
+    SDL_Log(" - adapterType: 0x%08X", properties.adapterType);
+    SDL_Log(" - backendType: 0x%08X", properties.backendType);
+#else
     WGPUSupportedLimits supportedLimits = {};
     supportedLimits.nextInChain         = nullptr;
 
@@ -107,20 +151,20 @@ void InspectAdapter(WGPUAdapter adapter)
 
     SDL_Log("Adapter properties:");
     SDL_Log(" - vendorID: %i", info.vendorID);
-    if (info.vendor.length > 0)
+    if (info.vendor.data)
     {
         SDL_Log(" - vendor: %s", info.vendor.data);
     }
-    if (info.architecture.length > 0)
+    if (info.architecture.data)
     {
         SDL_Log(" - architecture: %s", info.architecture.data);
     }
     SDL_Log(" - deviceID: %i", info.deviceID);
-    if (info.device.length > 0)
+    if (info.device.data)
     {
         SDL_Log(" - device: %s", info.device.data);
     }
-    if (info.description.length > 0)
+    if (info.description.data)
     {
         SDL_Log(" - description: %s", info.description.data);
     }
