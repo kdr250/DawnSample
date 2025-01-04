@@ -42,7 +42,7 @@ bool Application::Initialize()
     if (instance == nullptr)
     {
         SDL_Log("Instance creation failed!");
-        return EXIT_FAILURE;
+        return false;
     }
 
     // Create WebGPU surface
@@ -96,6 +96,19 @@ bool Application::Initialize()
             SDL_Log(" - message: %s", message.data);
         }
     };
+    deviceDesc.uncapturedErrorCallbackInfo2.nextInChain = nullptr;
+    deviceDesc.uncapturedErrorCallbackInfo2.callback    = [](const WGPUDevice* device,
+                                                          WGPUErrorType type,
+                                                          WGPUStringView message,
+                                                          void* /* pUserData1 */,
+                                                          void* /* pUserData2 */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message.data)
+        {
+            SDL_Log(" - message: %s", message.data);
+        }
+    };
 #endif
 
     device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
@@ -110,23 +123,42 @@ bool Application::Initialize()
         }
     };
     wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
-#else
-    auto onDeviceError = [](WGPULoggingType type, WGPUStringView message, void* /* pUserData */)
-    {
-        SDL_Log("device logging: type 0x%08X", type);
-        if (message.data)
-        {
-            SDL_Log(" - message: %s", message.data);
-        }
-    };
-    wgpuDeviceSetLoggingCallback(device, onDeviceError, nullptr);
 #endif
 
     WebGPUUtils::InspectDevice(device);
 
-    wgpuAdapterRelease(adapter);
-
     queue = wgpuDeviceGetQueue(device);
+
+    // Configure the surface
+    WGPUSurfaceConfiguration config = {};
+    config.nextInChain              = nullptr;
+    config.width                    = 1024;
+    config.height                   = 768;
+    config.usage                    = WGPUTextureUsage_RenderAttachment;
+
+#ifdef __EMSCRIPTEN__
+    WGPUTextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+    config.format                   = surfaceFormat;
+#else
+    WGPUSurfaceCapabilities capabilities;
+    WGPUStatus status = wgpuSurfaceGetCapabilities(surface, adapter, &capabilities);
+    if (status != WGPUStatus_Success)
+    {
+        SDL_Log("Could not get surface capabilities!");
+        return false;
+    }
+    config.format = capabilities.formats[0];
+#endif
+
+    config.viewFormatCount = 0;
+    config.viewFormats     = nullptr;
+    config.device          = device;
+    config.presentMode     = WGPUPresentMode_Fifo;
+    config.alphaMode       = WGPUCompositeAlphaMode_Auto;
+
+    wgpuSurfaceConfigure(surface, &config);
+
+    wgpuAdapterRelease(adapter);
 
     return true;
 }
@@ -134,8 +166,9 @@ bool Application::Initialize()
 void Application::Terminate()
 {
     // Terminate WebGPU
-    wgpuSurfaceRelease(surface);
+    wgpuSurfaceUnconfigure(surface);
     wgpuQueueRelease(queue);
+    wgpuSurfaceRelease(surface);
     wgpuDeviceRelease(device);
 
     // Terminate SDL
@@ -154,6 +187,7 @@ void Application::MainLoop()
 #endif
     }
 
+    // process input
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
@@ -174,6 +208,68 @@ void Application::MainLoop()
         isRunning = false;
     }
 
+    // Get the next target texture view
+    WGPUTextureView targetView = GetNextSurfaceTextureView();
+    if (!targetView)
+    {
+        return;
+    }
+
+    // Create a command encoder for the draw call
+    WGPUCommandEncoderDescriptor encoderDesc = {};
+    encoderDesc.nextInChain                  = nullptr;
+#ifdef __EMSCRIPTEN__
+    encoderDesc.label = "My command encoder";
+#else
+    encoderDesc.label = {"My command encoder", WGPU_STRLEN};
+#endif
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+
+    // Create the render pass that clears the screen with our color
+    WGPURenderPassDescriptor renderPassDesc = {};
+    renderPassDesc.nextInChain              = nullptr;
+
+    // The attachment part of the render pass descriptor describes the target texture of the pass
+    WGPURenderPassColorAttachment renderPassColorAttachment = {};
+    renderPassColorAttachment.view                          = targetView;
+    renderPassColorAttachment.resolveTarget                 = nullptr;
+    renderPassColorAttachment.loadOp                        = WGPULoadOp_Clear;
+    renderPassColorAttachment.storeOp                       = WGPUStoreOp_Store;
+    renderPassColorAttachment.clearValue                    = WGPUColor {0.9, 0.1, 0.2, 1.0};
+    renderPassColorAttachment.depthSlice                    = WGPU_DEPTH_SLICE_UNDEFINED;
+
+    renderPassDesc.colorAttachmentCount   = 1;
+    renderPassDesc.colorAttachments       = &renderPassColorAttachment;
+    renderPassDesc.depthStencilAttachment = nullptr;
+    renderPassDesc.timestampWrites        = nullptr;
+
+    // Create the render pass and end it immediately (we only clear the screen but do not draw anything)
+    WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+    wgpuRenderPassEncoderEnd(renderPass);
+    wgpuRenderPassEncoderRelease(renderPass);
+
+    // Finally encode and submit the render pass
+    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+    cmdBufferDescriptor.nextInChain                 = nullptr;
+#ifdef __EMSCRIPTEN__
+    cmdBufferDescriptor.label = "Command buffer";
+#else
+    cmdBufferDescriptor.label = {"Command buffer", WGPU_STRLEN};
+#endif
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+    wgpuCommandEncoderRelease(encoder);
+
+    wgpuQueueSubmit(queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+
+    // At the end of the frame
+    wgpuTextureViewRelease(targetView);
+
+#ifndef __EMSCRIPTEN__
+    wgpuSurfacePresent(surface);
+#endif
+
+    // tick
 #ifdef __EMSCRIPTEN__
     emscripten_sleep(100);
 #else
@@ -184,4 +280,38 @@ void Application::MainLoop()
 bool Application::IsRunning()
 {
     return isRunning;
+}
+
+WGPUTextureView Application::GetNextSurfaceTextureView()
+{
+    // Get the surface texture
+    WGPUSurfaceTexture surfaceTexture;
+    wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
+    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success)
+    {
+        return nullptr;
+    }
+
+    // Create a view for this surface texture
+    WGPUTextureViewDescriptor viewDescriptor;
+    viewDescriptor.nextInChain = nullptr;
+#ifdef __EMSCRIPTEN__
+    viewDescriptor.label = "Surface texture view";
+#else
+    viewDescriptor.label = {"Surface texture view", WGPU_STRLEN};
+    viewDescriptor.usage = WGPUTextureUsage_RenderAttachment;
+#endif
+    viewDescriptor.format          = wgpuTextureGetFormat(surfaceTexture.texture);
+    viewDescriptor.dimension       = WGPUTextureViewDimension_2D;
+    viewDescriptor.baseMipLevel    = 0;
+    viewDescriptor.mipLevelCount   = 1;
+    viewDescriptor.baseArrayLayer  = 0;
+    viewDescriptor.arrayLayerCount = 1;
+    viewDescriptor.aspect          = WGPUTextureAspect_All;
+
+    WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
+
+    wgpuTextureRelease(surfaceTexture.texture);
+
+    return targetView;
 }
