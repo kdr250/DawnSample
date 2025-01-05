@@ -19,9 +19,12 @@ public:
     bool IsRunning();
 
 private:
+    void SetDefaultLimits(WGPULimits& limits) const;
+    WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
+
     void InitializePipeline();
 
-    void PlayingWithBuffers();
+    void InitializeBuffers();
 
     WGPUTextureView GetNextSurfaceTextureView();
 
@@ -31,5 +34,8 @@ private:
     WGPUSurface surface;
     WGPURenderPipeline pipeline;
     WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-    bool isRunning                  = true;
+    WGPUBuffer vertexBuffer;
+    uint32_t vertexCount;
+
+    bool isRunning = true;
 };
