@@ -19,11 +19,15 @@ public:
     bool IsRunning();
 
 private:
+    void InitializePipeline();
+
     WGPUTextureView GetNextSurfaceTextureView();
 
     SDL_Window* window;
     WGPUDevice device;
     WGPUQueue queue;
     WGPUSurface surface;
-    bool isRunning = true;
+    WGPURenderPipeline pipeline;
+    WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
+    bool isRunning                  = true;
 };
