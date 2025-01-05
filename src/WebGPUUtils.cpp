@@ -4,12 +4,6 @@
 #include <cassert>
 #include <vector>
 
-#ifdef __EMSCRIPTEN__
-    #include <emscripten.h>
-    #include <emscripten/html5.h>
-    #include <emscripten/html5_webgpu.h>
-#endif
-
 WGPUAdapter WebGPUUtils::RequestAdapterSync(WGPUInstance instance,
                                             WGPURequestAdapterOptions const* options)
 {
@@ -276,4 +270,22 @@ void WebGPUUtils::InspectDevice(WGPUDevice device)
         SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
     }
 #endif
+}
+
+WGPUTextureFormat WebGPUUtils::GetTextureFormat(WGPUSurface surface, WGPUAdapter adapter)
+{
+#ifdef __EMSCRIPTEN__
+    WGPUTextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+#else
+    WGPUSurfaceCapabilities capabilities;
+    WGPUStatus status = wgpuSurfaceGetCapabilities(surface, adapter, &capabilities);
+    if (status != WGPUStatus_Success)
+    {
+        SDL_Log("Could not get surface capabilities! return WGPUTextureFormat_Undefined");
+        return WGPUTextureFormat_Undefined;
+    }
+    WGPUTextureFormat surfaceFormat = capabilities.formats[0];
+#endif
+
+    return surfaceFormat;
 }

@@ -59,14 +59,15 @@ bool Application::Initialize()
     wgpuInstanceRelease(instance);
 
     // Requesting Device
-    WGPUDeviceDescriptor deviceDesc = {};
-    deviceDesc.nextInChain          = nullptr;
-#ifdef __EMSCRIPTEN__
-    deviceDesc.label                    = "My Device";
+    WGPUDeviceDescriptor deviceDesc     = {};
+    deviceDesc.nextInChain              = nullptr;
+    deviceDesc.label                    = WebGPUUtils::GenerateString("My Device");
     deviceDesc.requiredFeatureCount     = 0;
     deviceDesc.requiredLimits           = nullptr;
     deviceDesc.defaultQueue.nextInChain = nullptr;
-    deviceDesc.defaultQueue.label       = "The default queue";
+    deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
+
+#ifdef __EMSCRIPTEN__
     deviceDesc.deviceLostCallback =
         [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
     {
@@ -77,11 +78,6 @@ bool Application::Initialize()
         }
     };
 #else
-    deviceDesc.label                               = {"My Device", WGPU_STRLEN};
-    deviceDesc.requiredFeatureCount                = 0;
-    deviceDesc.requiredLimits                      = nullptr;
-    deviceDesc.defaultQueue.nextInChain            = nullptr;
-    deviceDesc.defaultQueue.label                  = {"The default queue", WGPU_STRLEN};
     deviceDesc.deviceLostCallbackInfo2.nextInChain = nullptr;
     deviceDesc.deviceLostCallbackInfo2.mode        = WGPUCallbackMode_WaitAnyOnly;
     deviceDesc.deviceLostCallbackInfo2.callback    = [](const WGPUDevice* device,
@@ -135,26 +131,12 @@ bool Application::Initialize()
     config.width                    = 1024;
     config.height                   = 768;
     config.usage                    = WGPUTextureUsage_RenderAttachment;
-
-#ifdef __EMSCRIPTEN__
-    WGPUTextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
-    config.format                   = surfaceFormat;
-#else
-    WGPUSurfaceCapabilities capabilities;
-    WGPUStatus status = wgpuSurfaceGetCapabilities(surface, adapter, &capabilities);
-    if (status != WGPUStatus_Success)
-    {
-        SDL_Log("Could not get surface capabilities!");
-        return false;
-    }
-    config.format = capabilities.formats[0];
-#endif
-
-    config.viewFormatCount = 0;
-    config.viewFormats     = nullptr;
-    config.device          = device;
-    config.presentMode     = WGPUPresentMode_Fifo;
-    config.alphaMode       = WGPUCompositeAlphaMode_Auto;
+    config.format                   = WebGPUUtils::GetTextureFormat(surface, adapter);
+    config.viewFormatCount          = 0;
+    config.viewFormats              = nullptr;
+    config.device                   = device;
+    config.presentMode              = WGPUPresentMode_Fifo;
+    config.alphaMode                = WGPUCompositeAlphaMode_Auto;
 
     wgpuSurfaceConfigure(surface, &config);
 
@@ -218,12 +200,8 @@ void Application::MainLoop()
     // Create a command encoder for the draw call
     WGPUCommandEncoderDescriptor encoderDesc = {};
     encoderDesc.nextInChain                  = nullptr;
-#ifdef __EMSCRIPTEN__
-    encoderDesc.label = "My command encoder";
-#else
-    encoderDesc.label = {"My command encoder", WGPU_STRLEN};
-#endif
-    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+    encoderDesc.label                        = WebGPUUtils::GenerateString("My command encoder");
+    WGPUCommandEncoder encoder               = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
 
     // Create the render pass that clears the screen with our color
     WGPURenderPassDescriptor renderPassDesc = {};
@@ -251,11 +229,8 @@ void Application::MainLoop()
     // Finally encode and submit the render pass
     WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
     cmdBufferDescriptor.nextInChain                 = nullptr;
-#ifdef __EMSCRIPTEN__
-    cmdBufferDescriptor.label = "Command buffer";
-#else
-    cmdBufferDescriptor.label = {"Command buffer", WGPU_STRLEN};
-#endif
+    cmdBufferDescriptor.label                       = WebGPUUtils::GenerateString("Command buffer");
+
     WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
     wgpuCommandEncoderRelease(encoder);
 
@@ -295,10 +270,8 @@ WGPUTextureView Application::GetNextSurfaceTextureView()
     // Create a view for this surface texture
     WGPUTextureViewDescriptor viewDescriptor;
     viewDescriptor.nextInChain = nullptr;
-#ifdef __EMSCRIPTEN__
-    viewDescriptor.label = "Surface texture view";
-#else
-    viewDescriptor.label = {"Surface texture view", WGPU_STRLEN};
+    viewDescriptor.label       = WebGPUUtils::GenerateString("Surface texture view");
+#ifndef __EMSCRIPTEN__
     viewDescriptor.usage = WGPUTextureUsage_RenderAttachment;
 #endif
     viewDescriptor.format          = wgpuTextureGetFormat(surfaceTexture.texture);
