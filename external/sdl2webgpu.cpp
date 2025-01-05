@@ -1,6 +1,6 @@
 #include "sdl2webgpu.h"
 
-#include <webgpu/webgpu.h>
+#include <webgpu/webgpu_cpp.h>
 
 #ifdef SDL_VIDEO_DRIVER_COCOA
     #include <Cocoa/Cocoa.h>
@@ -23,7 +23,7 @@
     #include <emscripten/html5_webgpu.h>
 #endif
 
-WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
+wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 {
     SDL_SysWMinfo windowWMInfo;
     SDL_VERSION(&windowWMInfo.version);
@@ -37,16 +37,16 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         metal_layer = [CAMetalLayer layer];
         [ns_window.contentView setLayer:metal_layer];
 
-        WGPUSurfaceSourceMetalLayer fromMetalLayer;
-        fromMetalLayer.chain.sType = WGPUSType_SurfaceSourceMetalLayer;
+        wgpu::SurfaceSourceMetalLayer fromMetalLayer;
+        fromMetalLayer.chain.sType = wgpu::SType_SurfaceSourceMetalLayer;
 
         fromMetalLayer.chain.next = NULL;
         fromMetalLayer.layer      = metal_layer;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
 
-        WGPUStringView view;
+        wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
@@ -65,15 +65,15 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
 
         [ui_view.layer addSublayer:metal_layer];
 
-        WGPUSurfaceSourceMetalLayer fromMetalLayer;
-        fromMetalLayer.chain.sType = WGPUSType_SurfaceSourceMetalLayer;
+        wgpu::SurfaceSourceMetalLayer fromMetalLayer;
+        fromMetalLayer.chain.sType = wgpu::SType_SurfaceSourceMetalLayer;
         fromMetalLayer.chain.next  = NULL;
         fromMetalLayer.layer       = metal_layer;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
 
-        WGPUStringView view;
+        wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
@@ -86,16 +86,16 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         Display* x11_display = windowWMInfo.info.x11.display;
         Window x11_window    = windowWMInfo.info.x11.window;
 
-        WGPUSurfaceSourceXlibWindow fromXlibWindow;
-        fromXlibWindow.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
+        wgpu::SurfaceSourceXlibWindow fromXlibWindow;
+        fromXlibWindow.chain.sType = wgpu::SType_SurfaceSourceXlibWindow;
         fromXlibWindow.chain.next  = NULL;
         fromXlibWindow.display     = x11_display;
         fromXlibWindow.window      = x11_window;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromXlibWindow.chain;
 
-        WGPUStringView view;
+        wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
@@ -108,16 +108,16 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         struct wl_display* wayland_display = windowWMInfo.info.wl.display;
         struct wl_surface* wayland_surface = windowWMInfo.info.wl.surface;
 
-        WGPUSurfaceSourceWaylandSurface fromWaylandSurface;
-        fromWaylandSurface.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
+        wgpu::SurfaceSourceWaylandSurface fromWaylandSurface;
+        fromWaylandSurface.chain.sType = wgpu::SType_SurfaceSourceWaylandSurface;
         fromWaylandSurface.chain.next  = NULL;
         fromWaylandSurface.display     = wayland_display;
         fromWaylandSurface.surface     = wayland_surface;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
 
-        WGPUStringView view;
+        wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
@@ -130,32 +130,32 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window)
         HWND hwnd           = windowWMInfo.info.win.window;
         HINSTANCE hinstance = GetModuleHandle(NULL);
 
-        WGPUSurfaceSourceWindowsHWND fromWindowsHWND;
-        fromWindowsHWND.chain.sType = WGPUSType_SurfaceSourceWindowsHWND;
-        fromWindowsHWND.chain.next  = NULL;
+        wgpu::SurfaceSourceWindowsHWND fromWindowsHWND;
+        fromWindowsHWND.nextInChain = nullptr;
+        fromWindowsHWND.sType       = wgpu::SType::SurfaceSourceWindowsHWND;
         fromWindowsHWND.hinstance   = hinstance;
         fromWindowsHWND.hwnd        = hwnd;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromWindowsHWND.chain;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
+        surfaceDescriptor.nextInChain = &fromWindowsHWND;
 
-        WGPUStringView view;
+        wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 #ifdef SDL_VIDEO_DRIVER_EMSCRIPTEN
     {
-        WGPUSurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
-        fromCanvasHTMLSelector.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+        wgpu::SurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
+        fromCanvasHTMLSelector.chain.sType = wgpu::SType_SurfaceDescriptorFromCanvasHTMLSelector;
 
         fromCanvasHTMLSelector.chain.next = NULL;
         fromCanvasHTMLSelector.selector   = "canvas";
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector.chain;
         surfaceDescriptor.label       = NULL;
 
