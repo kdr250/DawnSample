@@ -12,22 +12,30 @@
 // We embbed the source of the shader module here
 const char* shaderSource = R"(
 
+struct Output {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec3f,
+};
+
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
-    var p = vec2f(0.0, 0.0);
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> Output {
+    var output: Output;
     if (in_vertex_index == 0u) {
-        p = vec2f(-0.5, -0.5);
+        output.position = vec4f(-0.5, -0.5, 0.0, 1.0);
+        output.color = vec3f(1.0, 0.0, 0.0);
     } else if (in_vertex_index == 1u) {
-        p = vec2f(0.5, -0.5);
+        output.position = vec4f(0.5, -0.5, 0.0, 1.0);
+        output.color = vec3f(0.0, 1.0, 0.0);
     } else {
-        p = vec2f(0.0, 0.5);
+        output.position = vec4f(0.0, 0.5, 0.0, 1.0);
+        output.color = vec3f(0.0, 0.0, 1.0);
     }
-    return vec4f(p, 0.0, 1.0);
+    return output;
 }
 
 @fragment
-fn fs_main() -> @location(0) vec4f {
-    return vec4f(0.0, 0.4, 1.0, 1.0);
+fn fs_main(input: Output) -> @location(0) vec4f {
+    return vec4f(input.color, 1.0);
 }
 
 )";
@@ -241,7 +249,7 @@ void Application::MainLoop()
     renderPassColorAttachment.resolveTarget                 = nullptr;
     renderPassColorAttachment.loadOp                        = WGPULoadOp_Clear;
     renderPassColorAttachment.storeOp                       = WGPUStoreOp_Store;
-    renderPassColorAttachment.clearValue                    = WGPUColor {0.9, 0.1, 0.2, 1.0};
+    renderPassColorAttachment.clearValue                    = WGPUColor {0.0, 0.0, 0.0, 1.0};
     renderPassColorAttachment.depthSlice                    = WGPU_DEPTH_SLICE_UNDEFINED;
 
     renderPassDesc.colorAttachmentCount   = 1;
