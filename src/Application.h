@@ -21,6 +21,8 @@ public:
 private:
     void InitializePipeline();
 
+    void PlayingWithBuffers();
+
     WGPUTextureView GetNextSurfaceTextureView();
 
     SDL_Window* window;

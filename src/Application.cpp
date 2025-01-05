@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include <vector>
+
 #ifdef __EMSCRIPTEN__
     #include <emscripten.h>
     #include <emscripten/html5.h>
@@ -177,6 +179,8 @@ bool Application::Initialize()
 
     InitializePipeline();
 
+    PlayingWithBuffers();
+
     return true;
 }
 
@@ -286,11 +290,7 @@ void Application::MainLoop()
 #endif
 
     // tick
-#ifdef __EMSCRIPTEN__
-    emscripten_sleep(100);
-#else
-    wgpuDeviceTick(device);
-#endif
+    WebGPUUtils::DeviceTick(device);
 }
 
 bool Application::IsRunning()
@@ -372,6 +372,84 @@ void Application::InitializePipeline()
     pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
     wgpuShaderModuleRelease(shaderModule);
+}
+
+void Application::PlayingWithBuffers()
+{
+    // Creating buffer
+    WGPUBufferDescriptor bufferDesc = {};
+    bufferDesc.nextInChain          = nullptr;
+    bufferDesc.label                = WebGPUUtils::GenerateString("Some GPU-size data buffer");
+    bufferDesc.usage                = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
+    bufferDesc.size                 = 16;
+    bufferDesc.mappedAtCreation     = false;
+
+    WGPUBuffer buffer1 = wgpuDeviceCreateBuffer(device, &bufferDesc);
+
+    bufferDesc.label   = WebGPUUtils::GenerateString("Output buffer");
+    bufferDesc.usage   = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
+    WGPUBuffer buffer2 = wgpuDeviceCreateBuffer(device, &bufferDesc);
+
+    std::vector<uint8_t> numbers(16);
+    for (uint8_t i = 0; i < 16; ++i)
+    {
+        numbers[i] = i;
+    }
+    // Copy this from `numbers` (RAM) to `buffer1` (VRAM)
+    wgpuQueueWriteBuffer(queue, buffer1, 0, numbers.data(), numbers.size());
+
+    // Copy data from buffer1 to buffer2
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
+
+    wgpuCommandEncoderCopyBufferToBuffer(encoder, buffer1, 0, buffer2, 0, 16);
+
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, nullptr);
+    wgpuCommandEncoderRelease(encoder);
+    wgpuQueueSubmit(queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+
+    // Reading from a buffer
+    struct Context
+    {
+        bool ready;
+        WGPUBuffer buffer;
+    };
+
+    auto onBuffer2Mapped = [](WGPUBufferMapAsyncStatus status, void* pUserData)
+    {
+        Context* context = reinterpret_cast<Context*>(pUserData);
+        context->ready   = true;
+        SDL_Log("Buffer 2 mapped with status: 0x%08X", status);
+        if (status != WGPUBufferMapAsyncStatus_Success)
+        {
+            return;
+        }
+        uint8_t* bufferData = (uint8_t*)wgpuBufferGetConstMappedRange(context->buffer, 0, 16);
+
+        std::string strBufferData = "";
+        for (int i = 0; i < 16; ++i)
+        {
+            if (i > 0)
+            {
+                strBufferData += ", ";
+            }
+            strBufferData += std::to_string((int)bufferData[i]);
+        }
+        SDL_Log("bufferData = [ %s ]", strBufferData.c_str());
+
+        wgpuBufferUnmap(context->buffer);
+    };
+
+    Context context {false, buffer2};
+    wgpuBufferMapAsync(buffer2, WGPUMapMode_Read, 0, 16, onBuffer2Mapped, (void*)&context);
+
+    while (!context.ready)
+    {
+        WebGPUUtils::DeviceTick(device);
+    }
+
+    wgpuBufferRelease(buffer1);
+    wgpuBufferRelease(buffer2);
 }
 
 WGPUTextureView Application::GetNextSurfaceTextureView()
