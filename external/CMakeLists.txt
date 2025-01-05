@@ -1,9 +1,9 @@
-add_library(sdl2webgpu STATIC sdl2webgpu.c)
+add_library(sdl2webgpu STATIC sdl2webgpu.cpp)
 target_include_directories(sdl2webgpu PUBLIC .)
 
 if (EMSCRIPTEN)
     set(USE_FLAGS "-s USE_WEBGPU=1 -s USE_SDL=2")
-    set(CMAKE_C_FLAGS ${USE_FLAGS})
+    set(CMAKE_CXX_FLAGS ${USE_FLAGS})
 else()
     target_link_libraries(sdl2webgpu PUBLIC SDL2::SDL2 dawn::webgpu_dawn)
 endif()
