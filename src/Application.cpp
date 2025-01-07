@@ -1,5 +1,6 @@
 #include "Application.h"
 
+#include <iostream>
 #include <vector>
 
 #ifdef __EMSCRIPTEN__
@@ -8,37 +9,9 @@
     #include <emscripten/html5_webgpu.h>
 #endif
 
+#include "ResourceManager.h"
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
-
-// We embbed the source of the shader module here
-const char* shaderSource = R"(
-
-struct VertexInput {
-    @location(0) position: vec2f,
-    @location(1) color: vec3f,
-};
-
-struct VertexOutput {
-    @builtin(position) position: vec4f,
-    @location(0) color: vec3f,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    let ratio = 1024.0 / 768.0; // The width and height of the target surface
-    out.position = vec4f(in.position.x, in.position.y * ratio, 0.0, 1.0);
-    out.color = in.color;
-    return out;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    return vec4f(in.color, 1.0);
-}
-
-)";
 
 bool Application::Initialize()
 {
@@ -320,7 +293,7 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
 
     requiredLimits.limits.maxVertexAttributes           = 2;
     requiredLimits.limits.maxVertexBuffers              = 1;
-    requiredLimits.limits.maxBufferSize                 = 6 * 5 * sizeof(float);
+    requiredLimits.limits.maxBufferSize                 = 15 * 5 * sizeof(float);
     requiredLimits.limits.maxVertexBufferArrayStride    = 5 * sizeof(float);
     requiredLimits.limits.maxInterStageShaderComponents = 3;
 
@@ -335,19 +308,14 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
 void Application::InitializePipeline()
 {
     // Load the shader module
-    WGPUShaderModuleDescriptor shaderDesc {};
+    WGPUShaderModule shaderModule =
+        ResourceManager::LoadShaderModule("resources/shader.wgsl", device);
 
-    WGPUShaderModuleWGSLDescriptor shaderCodeDesc {};
-    shaderCodeDesc.chain.next = nullptr;
-#ifdef __EMSCRIPTEN__
-    shaderCodeDesc.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
-#else
-    shaderCodeDesc.chain.sType = WGPUSType_ShaderSourceWGSL;
-#endif
-    // conect the chain
-    shaderDesc.nextInChain        = &shaderCodeDesc.chain;
-    shaderCodeDesc.code           = WebGPUUtils::GenerateString(shaderSource);
-    WGPUShaderModule shaderModule = wgpuDeviceCreateShaderModule(device, &shaderDesc);
+    if (shaderModule == nullptr)
+    {
+        std::cerr << "Could not load shader!" << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     // Create the render pipeline
     WGPURenderPipelineDescriptor pipelineDesc = {};
@@ -425,23 +393,19 @@ void Application::InitializePipeline()
 
 void Application::InitializeBuffers()
 {
-    // Define point data
-    std::vector<float> pointData = {
-        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,  // Point #0 (A)
-        +0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // Point #1
-        +0.5f, +0.5f, 0.0f, 0.0f, 1.0f,  // Point #2 (C)
-        -0.5f, +0.5f, 1.0f, 1.0f, 0.0f   // Point #3
-    };
+    // Define data vectors, but without filling them in
+    std::vector<float> pointData;
+    std::vector<uint16_t> indexData;
 
-    // Define index data
-    std::vector<uint16_t> indexData = {
-        0,
-        1,
-        2,  // Triangle #0 connects points #0, #1 and #2
-        0,
-        2,
-        3  // Triangle #1 connects points #0, #2 and #3
-    };
+    // Here we use the new 'loadGeometry' function:
+    bool success = ResourceManager::LoadGeometry("resources/webgpu.txt", pointData, indexData);
+
+    if (!success)
+    {
+        std::cerr << "Could not load geometry!" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     indexCount = static_cast<uint32_t>(indexData.size());
 
     // Create point buffer
