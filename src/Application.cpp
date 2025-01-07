@@ -27,7 +27,8 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = vec4f(in.position, 0.0, 1.0);
+    let ratio = 1024.0 / 768.0; // The width and height of the target surface
+    out.position = vec4f(in.position.x, in.position.y * ratio, 0.0, 1.0);
     out.color = in.color;
     return out;
 }
@@ -184,7 +185,8 @@ bool Application::Initialize()
 void Application::Terminate()
 {
     // Terminate WebGPU
-    wgpuBufferRelease(vertexBuffer);
+    wgpuBufferRelease(pointBuffer);
+    wgpuBufferRelease(indexBuffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuSurfaceUnconfigure(surface);
     wgpuQueueRelease(queue);
@@ -266,10 +268,15 @@ void Application::MainLoop()
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(renderPass,
                                          0,
-                                         vertexBuffer,
+                                         pointBuffer,
                                          0,
-                                         wgpuBufferGetSize(vertexBuffer));
-    wgpuRenderPassEncoderDraw(renderPass, vertexCount, 1, 0, 0);
+                                         wgpuBufferGetSize(pointBuffer));
+    wgpuRenderPassEncoderSetIndexBuffer(renderPass,
+                                        indexBuffer,
+                                        WGPUIndexFormat_Uint16,
+                                        0,
+                                        wgpuBufferGetSize(indexBuffer));
+    wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
 
     wgpuRenderPassEncoderEnd(renderPass);
     wgpuRenderPassEncoderRelease(renderPass);
@@ -418,56 +425,42 @@ void Application::InitializePipeline()
 
 void Application::InitializeBuffers()
 {
-    // Vertex buffer data
-    std::vector<float> vertexData = {// first triangle
-                                     // x0,  y0,  r0,  g0,  b0
-                                     -0.5f,
-                                     -0.5f,
-                                     1.0f,
-                                     0.0f,
-                                     0.0f,
-                                     // x1,  y1,  r1,  g1,  b1
-                                     0.5f,
-                                     -0.5f,
-                                     0.0f,
-                                     1.0f,
-                                     0.0f,
-                                     // x2,  y2,  r2,  g2,  b2
-                                     0.0f,
-                                     0.5f,
-                                     0.0f,
-                                     0.0f,
-                                     1.0f,
-                                     // second triangle
-                                     // x0,  y0,  r0,  g0,  b0
-                                     -0.55f,
-                                     -0.5f,
-                                     1.0f,
-                                     0.0f,
-                                     0.0f,
-                                     // x1,  y1,  r1,  g1,  b1
-                                     -0.05f,
-                                     0.5f,
-                                     0.0f,
-                                     1.0f,
-                                     0.0f,
-                                     // x2,  y2,  r2,  g2,  b2
-                                     -0.55f,
-                                     0.5f,
-                                     0.0f,
-                                     0.0f,
-                                     1.0f};
-    vertexCount = static_cast<uint32_t>(vertexData.size() / 5);
+    // Define point data
+    std::vector<float> pointData = {
+        -0.5f, -0.5f, 1.0f, 0.0f, 0.0f,  // Point #0 (A)
+        +0.5f, -0.5f, 0.0f, 1.0f, 0.0f,  // Point #1
+        +0.5f, +0.5f, 0.0f, 0.0f, 1.0f,  // Point #2 (C)
+        -0.5f, +0.5f, 1.0f, 1.0f, 0.0f   // Point #3
+    };
 
-    // Create vertex buffer
+    // Define index data
+    std::vector<uint16_t> indexData = {
+        0,
+        1,
+        2,  // Triangle #0 connects points #0, #1 and #2
+        0,
+        2,
+        3  // Triangle #1 connects points #0, #2 and #3
+    };
+    indexCount = static_cast<uint32_t>(indexData.size());
+
+    // Create point buffer
     WGPUBufferDescriptor bufferDesc {};
     bufferDesc.nextInChain      = nullptr;
-    bufferDesc.size             = vertexData.size() * sizeof(float);
+    bufferDesc.size             = pointData.size() * sizeof(float);
     bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
     bufferDesc.mappedAtCreation = false;
-    vertexBuffer                = wgpuDeviceCreateBuffer(device, &bufferDesc);
+    pointBuffer                 = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
-    wgpuQueueWriteBuffer(queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+    wgpuQueueWriteBuffer(queue, pointBuffer, 0, pointData.data(), bufferDesc.size);
+
+    // Create index buffer
+    bufferDesc.size  = indexData.size() * sizeof(uint16_t);
+    bufferDesc.size  = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
+    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
+    indexBuffer      = wgpuDeviceCreateBuffer(device, &bufferDesc);
+
+    wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
 }
 
 WGPUTextureView Application::GetNextSurfaceTextureView()
