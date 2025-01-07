@@ -2,6 +2,7 @@
 
 #include <SDL2/SDL.h>
 #include <webgpu/webgpu.h>
+#include <array>
 
 class Application
 {
@@ -19,6 +20,15 @@ public:
     bool IsRunning();
 
 private:
+    struct MyUniforms
+    {
+        std::array<float, 4> color;
+        float time;
+        float _padding[3];
+    };
+
+    static_assert(sizeof(MyUniforms) % 16 == 0);  // Have the compiler check byte alignment
+
     void SetDefaultLimits(WGPULimits& limits) const;
     WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
 
