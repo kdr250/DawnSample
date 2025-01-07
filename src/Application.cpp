@@ -209,8 +209,8 @@ void Application::MainLoop()
     }
 
     // Update uniform buffer
-    float t = SDL_GetTicks64() / 1000.0f;
-    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &t, sizeof(float));
+    float time = SDL_GetTicks64() / 1000.0f;
+    wgpuQueueWriteBuffer(queue, uniformBuffer, offsetof(MyUniforms, time), &time, sizeof(float));
 
     // Get the next target texture view
     WGPUTextureView targetView = GetNextSurfaceTextureView();
@@ -443,8 +443,9 @@ void Application::InitializePipeline()
     WGPUBindGroupLayoutEntry bindingLayout {};
     SetDefaultBindGroupLayout(bindingLayout);
     bindingLayout.binding = 0;  // The binding index as used in the @binding attribute in the shader
-    bindingLayout.visibility  = WGPUShaderStage_Vertex;
-    bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
+    bindingLayout.visibility            = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    bindingLayout.buffer.type           = WGPUBufferBindingType_Uniform;
+    bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
     // Create a bind group layout
     WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc {};
@@ -503,13 +504,16 @@ void Application::InitializeBuffers()
     wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
 
     // Create uniform buffer
-    bufferDesc.size  = 4 * sizeof(float);  // 4 floats are needed by alignment constraints
-    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
+    bufferDesc.size             = sizeof(MyUniforms);
+    bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
     bufferDesc.mappedAtCreation = false;
     uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
-    float currentTime = 1.0f;
-    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &currentTime, sizeof(float));
+    MyUniforms uniforms;
+    uniforms.time  = 1.0f;
+    uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
+
+    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 }
 
 void Application::InitializeBindGroups()
@@ -520,7 +524,7 @@ void Application::InitializeBindGroups()
     binding.binding     = 0;
     binding.buffer      = uniformBuffer;
     binding.offset      = 0;
-    binding.size        = 4 * sizeof(float);
+    binding.size        = sizeof(MyUniforms);
 
     // A bind group contains one or multiple bindings
     WGPUBindGroupDescriptor bindGroupDesc;
