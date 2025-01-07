@@ -22,9 +22,13 @@ private:
     void SetDefaultLimits(WGPULimits& limits) const;
     WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
 
+    void SetDefaultBindGroupLayout(WGPUBindGroupLayoutEntry& bindingLayout);
+
     void InitializePipeline();
 
     void InitializeBuffers();
+
+    void InitializeBindGroups();
 
     WGPUTextureView GetNextSurfaceTextureView();
 
@@ -37,6 +41,10 @@ private:
     WGPUBuffer pointBuffer;
     WGPUBuffer indexBuffer;
     uint32_t indexCount;
+    WGPUBuffer uniformBuffer;
+    WGPUBindGroupLayout bindGroupLayout;
+    WGPUBindGroup bindGroup;
+    WGPUPipelineLayout layout;
 
     bool isRunning = true;
 };

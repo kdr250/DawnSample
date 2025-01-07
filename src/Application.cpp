@@ -151,6 +151,7 @@ bool Application::Initialize()
 
     InitializePipeline();
     InitializeBuffers();
+    InitializeBindGroups();
 
     return true;
 }
@@ -158,6 +159,10 @@ bool Application::Initialize()
 void Application::Terminate()
 {
     // Terminate WebGPU
+    wgpuBindGroupRelease(bindGroup);
+    wgpuPipelineLayoutRelease(layout);
+    wgpuBindGroupLayoutRelease(bindGroupLayout);
+    wgpuBufferRelease(uniformBuffer);
     wgpuBufferRelease(pointBuffer);
     wgpuBufferRelease(indexBuffer);
     wgpuRenderPipelineRelease(pipeline);
@@ -202,6 +207,10 @@ void Application::MainLoop()
     {
         isRunning = false;
     }
+
+    // Update uniform buffer
+    float t = SDL_GetTicks64() / 1000.0f;
+    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &t, sizeof(float));
 
     // Get the next target texture view
     WGPUTextureView targetView = GetNextSurfaceTextureView();
@@ -249,6 +258,7 @@ void Application::MainLoop()
                                         WGPUIndexFormat_Uint16,
                                         0,
                                         wgpuBufferGetSize(indexBuffer));
+    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
 
     wgpuRenderPassEncoderEnd(renderPass);
@@ -291,11 +301,17 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     WGPURequiredLimits requiredLimits {};
     SetDefaultLimits(requiredLimits.limits);
 
+    // vertex and shader
     requiredLimits.limits.maxVertexAttributes           = 2;
     requiredLimits.limits.maxVertexBuffers              = 1;
     requiredLimits.limits.maxBufferSize                 = 15 * 5 * sizeof(float);
     requiredLimits.limits.maxVertexBufferArrayStride    = 5 * sizeof(float);
     requiredLimits.limits.maxInterStageShaderComponents = 3;
+
+    // uniform
+    requiredLimits.limits.maxBindGroups                   = 1;
+    requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -303,6 +319,45 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
         supportedLimits.limits.minStorageBufferOffsetAlignment;
 
     return requiredLimits;
+}
+
+void Application::SetDefaultBindGroupLayout(WGPUBindGroupLayoutEntry& bindingLayout)
+{
+#ifdef __EMSCRIPTEN__
+    bindingLayout.buffer.nextInChain      = nullptr;
+    bindingLayout.buffer.type             = WGPUBufferBindingType_Undefined;
+    bindingLayout.buffer.hasDynamicOffset = false;
+
+    bindingLayout.sampler.nextInChain = nullptr;
+    bindingLayout.sampler.type        = WGPUSamplerBindingType_Undefined;
+
+    bindingLayout.storageTexture.nextInChain   = nullptr;
+    bindingLayout.storageTexture.access        = WGPUStorageTextureAccess_Undefined;
+    bindingLayout.storageTexture.format        = WGPUTextureFormat_Undefined;
+    bindingLayout.storageTexture.viewDimension = WGPUTextureViewDimension_Undefined;
+
+    bindingLayout.texture.nextInChain   = nullptr;
+    bindingLayout.texture.multisampled  = false;
+    bindingLayout.texture.sampleType    = WGPUTextureSampleType_Undefined;
+    bindingLayout.texture.viewDimension = WGPUTextureViewDimension_Undefined;
+#else
+    bindingLayout.buffer.nextInChain      = nullptr;
+    bindingLayout.buffer.type             = WGPUBufferBindingType_BindingNotUsed;
+    bindingLayout.buffer.hasDynamicOffset = false;
+
+    bindingLayout.sampler.nextInChain = nullptr;
+    bindingLayout.sampler.type        = WGPUSamplerBindingType_BindingNotUsed;
+
+    bindingLayout.storageTexture.nextInChain   = nullptr;
+    bindingLayout.storageTexture.access        = WGPUStorageTextureAccess_BindingNotUsed;
+    bindingLayout.storageTexture.format        = WGPUTextureFormat_Undefined;
+    bindingLayout.storageTexture.viewDimension = WGPUTextureViewDimension_Undefined;
+
+    bindingLayout.texture.nextInChain   = nullptr;
+    bindingLayout.texture.multisampled  = false;
+    bindingLayout.texture.sampleType    = WGPUTextureSampleType_BindingNotUsed;
+    bindingLayout.texture.viewDimension = WGPUTextureViewDimension_Undefined;
+#endif
 }
 
 void Application::InitializePipeline()
@@ -384,7 +439,28 @@ void Application::InitializePipeline()
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
     // Describe pipeline layout
-    pipelineDesc.layout = nullptr;
+    // Define binding layout
+    WGPUBindGroupLayoutEntry bindingLayout {};
+    SetDefaultBindGroupLayout(bindingLayout);
+    bindingLayout.binding = 0;  // The binding index as used in the @binding attribute in the shader
+    bindingLayout.visibility  = WGPUShaderStage_Vertex;
+    bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
+
+    // Create a bind group layout
+    WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc {};
+    bindGroupLayoutDesc.nextInChain = nullptr;
+    bindGroupLayoutDesc.entryCount  = 1;
+    bindGroupLayoutDesc.entryCount  = 1;
+    bindGroupLayoutDesc.entries     = &bindingLayout;
+    bindGroupLayout                 = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDesc);
+
+    // Create pipeline layout
+    WGPUPipelineLayoutDescriptor layoutDesc {};
+    layoutDesc.nextInChain          = nullptr;
+    layoutDesc.bindGroupLayoutCount = 1;
+    layoutDesc.bindGroupLayouts     = &bindGroupLayout;
+    layout                          = wgpuDeviceCreatePipelineLayout(device, &layoutDesc);
+    pipelineDesc.layout             = layout;
 
     pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
@@ -425,6 +501,35 @@ void Application::InitializeBuffers()
     indexBuffer      = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
     wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
+
+    // Create uniform buffer
+    bufferDesc.size  = 4 * sizeof(float);  // 4 floats are needed by alignment constraints
+    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
+    bufferDesc.mappedAtCreation = false;
+    uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
+
+    float currentTime = 1.0f;
+    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &currentTime, sizeof(float));
+}
+
+void Application::InitializeBindGroups()
+{
+    // Create a binding
+    WGPUBindGroupEntry binding {};
+    binding.nextInChain = nullptr;
+    binding.binding     = 0;
+    binding.buffer      = uniformBuffer;
+    binding.offset      = 0;
+    binding.size        = 4 * sizeof(float);
+
+    // A bind group contains one or multiple bindings
+    WGPUBindGroupDescriptor bindGroupDesc;
+    bindGroupDesc.nextInChain = nullptr;
+    bindGroupDesc.label       = WebGPUUtils::GenerateString("Bind Group");
+    bindGroupDesc.layout      = bindGroupLayout;
+    bindGroupDesc.entryCount  = 1;
+    bindGroupDesc.entries     = &binding;
+    bindGroup                 = wgpuDeviceCreateBindGroup(device, &bindGroupDesc);
 }
 
 WGPUTextureView Application::GetNextSurfaceTextureView()
