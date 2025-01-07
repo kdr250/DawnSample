@@ -34,8 +34,9 @@ private:
     WGPUSurface surface;
     WGPURenderPipeline pipeline;
     WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-    WGPUBuffer vertexBuffer;
-    uint32_t vertexCount;
+    WGPUBuffer pointBuffer;
+    WGPUBuffer indexBuffer;
+    uint32_t indexCount;
 
     bool isRunning = true;
 };
