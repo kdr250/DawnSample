@@ -53,6 +53,21 @@ namespace WebGPUUtils
 #endif
 
     /**
+     * Helper function for bool
+     */
+#ifdef __EMSCRIPTEN__
+    inline bool GenerateBool(const bool flag)
+    {
+        return flag;
+    }
+#else
+    inline WGPUOptionalBool GenerateBool(const bool flag)
+    {
+        return flag ? WGPUOptionalBool_True : WGPUOptionalBool_False;
+    }
+#endif
+
+    /**
      * Helper function to tick
      */
 #ifdef __EMSCRIPTEN__
