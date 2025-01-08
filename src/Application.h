@@ -34,6 +34,9 @@ private:
 
     void SetDefaultBindGroupLayout(WGPUBindGroupLayoutEntry& bindingLayout);
 
+    void SetDefaultStencilFaceState(WGPUStencilFaceState& stencilFaceState);
+    void SetDefaultDepthStencilState(WGPUDepthStencilState& depthStencilState);
+
     void InitializePipeline();
 
     void InitializeBuffers();
@@ -55,6 +58,8 @@ private:
     WGPUBindGroupLayout bindGroupLayout;
     WGPUBindGroup bindGroup;
     WGPUPipelineLayout layout;
+    WGPUTexture depthTexture;
+    WGPUTextureView depthTextureView;
 
     bool isRunning = true;
 };
