@@ -4,6 +4,11 @@
 #include <webgpu/webgpu.h>
 #include <array>
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_LEFT_HANDED
+#include <glm/ext.hpp>
+#include <glm/glm.hpp>
+
 class Application
 {
 public:
@@ -22,9 +27,13 @@ public:
 private:
     struct MyUniforms
     {
+        // We add transform matrices
+        glm::mat4x4 projectionMatrix;
+        glm::mat4x4 viewMatrix;
+        glm::mat4x4 modelMatrix;
         std::array<float, 4> color;
         float time;
-        float _padding[3];
+        float _pad[3];
     };
 
     static_assert(sizeof(MyUniforms) % 16 == 0);  // Have the compiler check byte alignment
@@ -60,6 +69,8 @@ private:
     WGPUPipelineLayout layout;
     WGPUTexture depthTexture;
     WGPUTextureView depthTextureView;
+
+    MyUniforms uniforms;
 
     bool isRunning = true;
 };
