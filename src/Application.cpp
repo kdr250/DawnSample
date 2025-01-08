@@ -532,10 +532,12 @@ void Application::InitializePipeline()
 
     // Create the view of the depth texture manipulated by the rasterizer
     WGPUTextureViewDescriptor depthTextureViewDesc;
-    depthTextureViewDesc.nextInChain     = nullptr;
-    depthTextureViewDesc.label           = WebGPUUtils::GenerateString("Depth Texture View");
-    depthTextureViewDesc.aspect          = WGPUTextureAspect_DepthOnly;
-    depthTextureViewDesc.usage           = WGPUTextureUsage_None;
+    depthTextureViewDesc.nextInChain = nullptr;
+    depthTextureViewDesc.label       = WebGPUUtils::GenerateString("Depth Texture View");
+    depthTextureViewDesc.aspect      = WGPUTextureAspect_DepthOnly;
+#ifndef __EMSCRIPTEN__
+    depthTextureViewDesc.usage = WGPUTextureUsage_None;
+#endif
     depthTextureViewDesc.baseArrayLayer  = 0;
     depthTextureViewDesc.arrayLayerCount = 1;
     depthTextureViewDesc.baseMipLevel    = 0;
