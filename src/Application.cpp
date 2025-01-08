@@ -1,6 +1,5 @@
 #include "Application.h"
 
-#include <iostream>
 #include <vector>
 
 #ifdef __EMSCRIPTEN__
@@ -168,8 +167,7 @@ void Application::Terminate()
     wgpuPipelineLayoutRelease(layout);
     wgpuBindGroupLayoutRelease(bindGroupLayout);
     wgpuBufferRelease(uniformBuffer);
-    wgpuBufferRelease(pointBuffer);
-    wgpuBufferRelease(indexBuffer);
+    wgpuBufferRelease(vertexBuffer);
     wgpuRenderPipelineRelease(pipeline);
     wgpuSurfaceUnconfigure(surface);
     wgpuQueueRelease(queue);
@@ -222,17 +220,13 @@ void Application::MainLoop()
                          sizeof(MyUniforms::time));
 
     // Update view matrix
-    float angle1 = uniforms.time;
-    auto R1      = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
+    float angle1   = uniforms.time;
+    glm::mat4x4 R1 = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
     // Scale the object
-    glm::mat4x4 S = glm::transpose(
-        glm::
-            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
+    glm::mat4x4 S = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
 
     // Translate the object
-    glm::mat4x4 T1 = glm::transpose(
-        glm::
-            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+    glm::mat4x4 T1       = glm::mat4x4(1.0);
     uniforms.modelMatrix = R1 * T1 * S;
     wgpuQueueWriteBuffer(queue,
                          uniformBuffer,
@@ -290,16 +284,11 @@ void Application::MainLoop()
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
     wgpuRenderPassEncoderSetVertexBuffer(renderPass,
                                          0,
-                                         pointBuffer,
+                                         vertexBuffer,
                                          0,
-                                         wgpuBufferGetSize(pointBuffer));
-    wgpuRenderPassEncoderSetIndexBuffer(renderPass,
-                                        indexBuffer,
-                                        WGPUIndexFormat_Uint16,
-                                        0,
-                                        wgpuBufferGetSize(indexBuffer));
+                                         wgpuBufferGetSize(vertexBuffer));
     wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
-    wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
+    wgpuRenderPassEncoderDraw(renderPass, indexCount, 1, 0, 0);
 
     wgpuRenderPassEncoderEnd(renderPass);
     wgpuRenderPassEncoderRelease(renderPass);
@@ -344,7 +333,7 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     // vertex and shader
     requiredLimits.limits.maxVertexAttributes           = 3;
     requiredLimits.limits.maxVertexBuffers              = 1;
-    requiredLimits.limits.maxBufferSize                 = 16 * sizeof(VertexAttributes);
+    requiredLimits.limits.maxBufferSize                 = 10000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride    = sizeof(VertexAttributes);
     requiredLimits.limits.maxInterStageShaderComponents = 6;
 
@@ -436,7 +425,7 @@ void Application::InitializePipeline()
 
     if (shaderModule == nullptr)
     {
-        std::cerr << "Could not load shader!" << std::endl;
+        SDL_Log("Could not load shader!");
         exit(EXIT_FAILURE);
     }
 
@@ -579,38 +568,26 @@ void Application::InitializePipeline()
 
 void Application::InitializeBuffers()
 {
-    // Define data vectors, but without filling them in
-    std::vector<float> pointData;
-    std::vector<uint16_t> indexData;
-
-    // Here we use the new 'loadGeometry' function:
-    bool success = ResourceManager::LoadGeometry("resources/pyramid.txt", pointData, indexData, 6);
-
+    // Load mesh data from OBJ file
+    std::vector<VertexAttributes> vertexData;
+    bool success = ResourceManager::LoadGeometryFromObj("resources/pyramid.obj", vertexData);
     if (!success)
     {
-        std::cerr << "Could not load geometry!" << std::endl;
+        SDL_Log("Could not load geometry!");
         exit(EXIT_FAILURE);
     }
 
-    indexCount = static_cast<uint32_t>(indexData.size());
+    indexCount = static_cast<uint32_t>(vertexData.size());
 
-    // Create point buffer
+    // Create vertex buffer
     WGPUBufferDescriptor bufferDesc {};
     bufferDesc.nextInChain      = nullptr;
-    bufferDesc.size             = pointData.size() * sizeof(float);
+    bufferDesc.size             = vertexData.size() * sizeof(VertexAttributes);
     bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
     bufferDesc.mappedAtCreation = false;
-    pointBuffer                 = wgpuDeviceCreateBuffer(device, &bufferDesc);
+    vertexBuffer                = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
-    wgpuQueueWriteBuffer(queue, pointBuffer, 0, pointData.data(), bufferDesc.size);
-
-    // Create index buffer
-    bufferDesc.size  = indexData.size() * sizeof(uint16_t);
-    bufferDesc.size  = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
-    bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;
-    indexBuffer      = wgpuDeviceCreateBuffer(device, &bufferDesc);
-
-    wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
+    wgpuQueueWriteBuffer(queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
     // Create uniform buffer
     bufferDesc.size             = sizeof(MyUniforms);
@@ -619,53 +596,21 @@ void Application::InitializeBuffers()
     uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
     // Upload the initial value of the uniforms
-    // Build transform matrices
-    // Option A: Manually define matrices
-    // Scale the object
-    glm::mat4x4 S = glm::transpose(
-        glm::
-            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
-
-    // Translate the object
-    glm::mat4x4 T1 = glm::transpose(
-        glm::
-            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
-
     // Translate the view
-    glm::vec3 focalPoint(0.0, 0.0, -2.0);
-    glm::mat4x4 T2 = glm::transpose(glm::mat4x4(1.0,
-                                                0.0,
-                                                0.0,
-                                                -focalPoint.x,
-                                                0.0,
-                                                1.0,
-                                                0.0,
-                                                -focalPoint.y,
-                                                0.0,
-                                                0.0,
-                                                1.0,
-                                                -focalPoint.z,
-                                                0.0,
-                                                0.0,
-                                                0.0,
-                                                1.0));
-
+    glm::vec3 focalPoint(0.0, 0.0, -1.0);
     // Rotate the object
-    float angle1   = 2.0f;  // arbitrary time
-    float c1       = cos(angle1);
-    float s1       = sin(angle1);
-    glm::mat4x4 R1 = glm::transpose(
-        glm::mat4x4(c1, s1, 0.0, 0.0, -s1, c1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
-
+    float angle1 = 2.0f;  // arbitrary time
     // Rotate the view point
-    float angle2   = 3.0f * PI / 4.0f;
-    float c2       = cos(angle2);
-    float s2       = sin(angle2);
-    glm::mat4x4 R2 = glm::transpose(
-        glm::mat4x4(1.0, 0.0, 0.0, 0.0, 0.0, c2, s2, 0.0, 0.0, -s2, c2, 0.0, 0.0, 0.0, 0.0, 1.0));
+    float angle2 = 3.0f * PI / 4.0f;
 
+    glm::mat4x4 S        = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
+    glm::mat4x4 T1       = glm::mat4x4(1.0);
+    glm::mat4x4 R1       = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
     uniforms.modelMatrix = R1 * T1 * S;
-    uniforms.viewMatrix  = T2 * R2;
+
+    glm::mat4x4 R2      = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
+    glm::mat4x4 T2      = glm::translate(glm::mat4x4(1.0), -focalPoint);
+    uniforms.viewMatrix = T2 * R2;
 
     float ratio               = 640.0f / 480.0f;
     float focalLength         = 2.0;
@@ -688,31 +633,6 @@ void Application::InitializeBuffers()
                                                            0.0,
                                                            1.0 / focalLength,
                                                            0.0));
-
-    // Option B: Use GLM extensions
-    S                    = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-    T1                   = glm::translate(glm::mat4x4(1.0), glm::vec3(0.5, 0.0, 0.0));
-    R1                   = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    uniforms.modelMatrix = R1 * T1 * S;
-
-    R2                  = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
-    T2                  = glm::translate(glm::mat4x4(1.0), -focalPoint);
-    uniforms.viewMatrix = T2 * R2;
-
-    // Option C: A different way of using GLM extensions
-    glm::mat4x4 M(1.0);
-    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
-    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
-    M                    = glm::scale(M, glm::vec3(0.3f));
-    uniforms.modelMatrix = M;
-
-    glm::mat4x4 V(1.0);
-    V                   = glm::translate(V, -focalPoint);
-    V                   = glm::rotate(V, -angle2, glm::vec3(1.0, 0.0, 0.0));
-    uniforms.viewMatrix = V;
-
-    float fov                 = 2 * glm::atan(1 / focalLength);
-    uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
 
     uniforms.time  = 1.0f;
     uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};

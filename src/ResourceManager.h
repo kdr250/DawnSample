@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <vector>
 
+#include "Application.h"
+
 class ResourceManager
 {
 public:
@@ -15,6 +17,9 @@ public:
                              std::vector<float>& pointData,
                              std::vector<uint16_t>& indexData,
                              int dimensions);
+
+    static bool LoadGeometryFromObj(const std::filesystem::path& path,
+                                    std::vector<VertexAttributes>& vertexData);
 
     /**
 	 * Create a shader module for a given WebGPU `device` from a WGSL shader source
