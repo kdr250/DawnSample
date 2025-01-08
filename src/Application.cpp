@@ -13,6 +13,8 @@
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
+constexpr float PI = 3.14159265358979323846f;
+
 bool Application::Initialize()
 {
     // Init SDL
@@ -212,8 +214,31 @@ void Application::MainLoop()
     }
 
     // Update uniform buffer
-    float time = SDL_GetTicks64() / 1000.0f;
-    wgpuQueueWriteBuffer(queue, uniformBuffer, offsetof(MyUniforms, time), &time, sizeof(float));
+    uniforms.time = SDL_GetTicks64() / 1000.0f;
+    wgpuQueueWriteBuffer(queue,
+                         uniformBuffer,
+                         offsetof(MyUniforms, time),
+                         &uniforms.time,
+                         sizeof(MyUniforms::time));
+
+    // Update view matrix
+    float angle1 = uniforms.time;
+    auto R1      = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
+    // Scale the object
+    glm::mat4x4 S = glm::transpose(
+        glm::
+            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Translate the object
+    glm::mat4x4 T1 = glm::transpose(
+        glm::
+            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+    uniforms.modelMatrix = R1 * T1 * S;
+    wgpuQueueWriteBuffer(queue,
+                         uniformBuffer,
+                         offsetof(MyUniforms, modelMatrix),
+                         &uniforms.modelMatrix,
+                         sizeof(MyUniforms::modelMatrix));
 
     // Get the next target texture view
     WGPUTextureView targetView = GetNextSurfaceTextureView();
@@ -326,7 +351,7 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     // uniform
     requiredLimits.limits.maxBindGroups                   = 1;
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4;
+    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
     // for the depth buffer
     requiredLimits.limits.maxTextureDimension1D = 768;
@@ -590,7 +615,102 @@ void Application::InitializeBuffers()
     bufferDesc.mappedAtCreation = false;
     uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
-    MyUniforms uniforms;
+    // Upload the initial value of the uniforms
+    // Build transform matrices
+    // Option A: Manually define matrices
+    // Scale the object
+    glm::mat4x4 S = glm::transpose(
+        glm::
+            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Translate the object
+    glm::mat4x4 T1 = glm::transpose(
+        glm::
+            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Translate the view
+    glm::vec3 focalPoint(0.0, 0.0, -2.0);
+    glm::mat4x4 T2 = glm::transpose(glm::mat4x4(1.0,
+                                                0.0,
+                                                0.0,
+                                                -focalPoint.x,
+                                                0.0,
+                                                1.0,
+                                                0.0,
+                                                -focalPoint.y,
+                                                0.0,
+                                                0.0,
+                                                1.0,
+                                                -focalPoint.z,
+                                                0.0,
+                                                0.0,
+                                                0.0,
+                                                1.0));
+
+    // Rotate the object
+    float angle1   = 2.0f;  // arbitrary time
+    float c1       = cos(angle1);
+    float s1       = sin(angle1);
+    glm::mat4x4 R1 = glm::transpose(
+        glm::mat4x4(c1, s1, 0.0, 0.0, -s1, c1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Rotate the view point
+    float angle2   = 3.0f * PI / 4.0f;
+    float c2       = cos(angle2);
+    float s2       = sin(angle2);
+    glm::mat4x4 R2 = glm::transpose(
+        glm::mat4x4(1.0, 0.0, 0.0, 0.0, 0.0, c2, s2, 0.0, 0.0, -s2, c2, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    uniforms.modelMatrix = R1 * T1 * S;
+    uniforms.viewMatrix  = T2 * R2;
+
+    float ratio               = 640.0f / 480.0f;
+    float focalLength         = 2.0;
+    float near                = 0.01f;
+    float far                 = 100.0f;
+    float divider             = 1 / (focalLength * (far - near));
+    uniforms.projectionMatrix = glm::transpose(glm::mat4x4(1.0,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           ratio,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           far * divider,
+                                                           -far * near * divider,
+                                                           0.0,
+                                                           0.0,
+                                                           1.0 / focalLength,
+                                                           0.0));
+
+    // Option B: Use GLM extensions
+    S                    = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
+    T1                   = glm::translate(glm::mat4x4(1.0), glm::vec3(0.5, 0.0, 0.0));
+    R1                   = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
+    uniforms.modelMatrix = R1 * T1 * S;
+
+    R2                  = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
+    T2                  = glm::translate(glm::mat4x4(1.0), -focalPoint);
+    uniforms.viewMatrix = T2 * R2;
+
+    // Option C: A different way of using GLM extensions
+    glm::mat4x4 M(1.0);
+    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
+    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
+    M                    = glm::scale(M, glm::vec3(0.3f));
+    uniforms.modelMatrix = M;
+
+    glm::mat4x4 V(1.0);
+    V                   = glm::translate(V, -focalPoint);
+    V                   = glm::rotate(V, -angle2, glm::vec3(1.0, 0.0, 0.0));
+    uniforms.viewMatrix = V;
+
+    float fov                 = 2 * glm::atan(1 / focalLength);
+    uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
+
     uniforms.time  = 1.0f;
     uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
 
