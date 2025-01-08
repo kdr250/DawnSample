@@ -305,7 +305,7 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     requiredLimits.limits.maxVertexAttributes           = 2;
     requiredLimits.limits.maxVertexBuffers              = 1;
     requiredLimits.limits.maxBufferSize                 = 15 * 5 * sizeof(float);
-    requiredLimits.limits.maxVertexBufferArrayStride    = 5 * sizeof(float);
+    requiredLimits.limits.maxVertexBufferArrayStride    = 6 * sizeof(float);
     requiredLimits.limits.maxInterStageShaderComponents = 3;
 
     // uniform
@@ -380,15 +380,15 @@ void Application::InitializePipeline()
     WGPUVertexBufferLayout vertexBufferLayout {};
     std::vector<WGPUVertexAttribute> vertexAttribs(2);
     vertexAttribs[0].shaderLocation = 0;  // Describe the position attribute
-    vertexAttribs[0].format         = WGPUVertexFormat_Float32x2;
+    vertexAttribs[0].format         = WGPUVertexFormat_Float32x3;
     vertexAttribs[0].offset         = 0;
     vertexAttribs[1].shaderLocation = 1;  // Describe the color attribute
     vertexAttribs[1].format         = WGPUVertexFormat_Float32x3;
-    vertexAttribs[1].offset         = 2 * sizeof(float);
+    vertexAttribs[1].offset         = 3 * sizeof(float);
 
     vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
     vertexBufferLayout.attributes     = vertexAttribs.data();
-    vertexBufferLayout.arrayStride    = 5 * sizeof(float);
+    vertexBufferLayout.arrayStride    = 6 * sizeof(float);
     vertexBufferLayout.stepMode       = WGPUVertexStepMode_Vertex;
 
     pipelineDesc.vertex.bufferCount = 1;
@@ -475,7 +475,7 @@ void Application::InitializeBuffers()
     std::vector<uint16_t> indexData;
 
     // Here we use the new 'loadGeometry' function:
-    bool success = ResourceManager::LoadGeometry("resources/webgpu.txt", pointData, indexData);
+    bool success = ResourceManager::LoadGeometry("resources/pyramid.txt", pointData, indexData, 3);
 
     if (!success)
     {
