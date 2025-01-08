@@ -42,8 +42,6 @@ private:
 
     WGPUTextureView GetNextSurfaceTextureView();
 
-    uint32_t CeilToNextMultiple(uint32_t value, uint32_t step);
-
     SDL_Window* window;
     WGPUDevice device;
     WGPUQueue queue;
@@ -57,7 +55,6 @@ private:
     WGPUBindGroupLayout bindGroupLayout;
     WGPUBindGroup bindGroup;
     WGPUPipelineLayout layout;
-    uint32_t uniformStride;
 
     bool isRunning = true;
 };

@@ -34,5 +34,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // We multiply the scene's color with our global uniform (this is one
     // possible use of the color uniform, among many others).
     let color = in.color * uMyUniforms.color.rgb;
-    return vec4f(color, uMyUniforms.color.a);
+    return vec4f(color, 1.0);
 }

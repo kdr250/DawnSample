@@ -209,13 +209,8 @@ void Application::MainLoop()
     }
 
     // Update uniform buffer
-    MyUniforms uniforms;
-    uniforms.time = SDL_GetTicks64() / 1000.0f;
-    wgpuQueueWriteBuffer(queue,
-                         uniformBuffer,
-                         offsetof(MyUniforms, time),
-                         &uniforms.time,
-                         sizeof(MyUniforms::time));
+    float time = SDL_GetTicks64() / 1000.0f;
+    wgpuQueueWriteBuffer(queue, uniformBuffer, offsetof(MyUniforms, time), &time, sizeof(float));
 
     // Get the next target texture view
     WGPUTextureView targetView = GetNextSurfaceTextureView();
@@ -253,7 +248,6 @@ void Application::MainLoop()
 
     // set pipeline to renderpass and draw
     wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
-
     wgpuRenderPassEncoderSetVertexBuffer(renderPass,
                                          0,
                                          pointBuffer,
@@ -264,17 +258,7 @@ void Application::MainLoop()
                                         WGPUIndexFormat_Uint16,
                                         0,
                                         wgpuBufferGetSize(indexBuffer));
-
-    uint32_t dynamicOffset = 0;
-
-    // set binding group
-    dynamicOffset = 0 * uniformStride;
-    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 1, &dynamicOffset);
-    wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
-
-    // Set binding group with a different uniform offset
-    dynamicOffset = 1 * uniformStride;
-    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 1, &dynamicOffset);
+    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
     wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
 
     wgpuRenderPassEncoderEnd(renderPass);
@@ -325,10 +309,9 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     requiredLimits.limits.maxInterStageShaderComponents = 3;
 
     // uniform
-    requiredLimits.limits.maxBindGroups                             = 1;
-    requiredLimits.limits.maxUniformBuffersPerShaderStage           = 1;
-    requiredLimits.limits.maxUniformBufferBindingSize               = 16 * 4;
-    requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 1;
+    requiredLimits.limits.maxBindGroups                   = 1;
+    requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -460,10 +443,9 @@ void Application::InitializePipeline()
     WGPUBindGroupLayoutEntry bindingLayout {};
     SetDefaultBindGroupLayout(bindingLayout);
     bindingLayout.binding = 0;  // The binding index as used in the @binding attribute in the shader
-    bindingLayout.visibility              = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
-    bindingLayout.buffer.type             = WGPUBufferBindingType_Uniform;
-    bindingLayout.buffer.minBindingSize   = sizeof(MyUniforms);
-    bindingLayout.buffer.hasDynamicOffset = true;
+    bindingLayout.visibility            = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    bindingLayout.buffer.type           = WGPUBufferBindingType_Uniform;
+    bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
     // Create a bind group layout
     WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc {};
@@ -522,27 +504,16 @@ void Application::InitializeBuffers()
     wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
 
     // Create uniform buffer
-    WGPUSupportedLimits deviceSupportedLimits;
-    deviceSupportedLimits.nextInChain = nullptr;
-    wgpuDeviceGetLimits(device, &deviceSupportedLimits);
-    WGPULimits deviceLimits = deviceSupportedLimits.limits;
-    uniformStride           = CeilToNextMultiple((uint32_t)sizeof(MyUniforms),
-                                       (uint32_t)deviceLimits.minUniformBufferOffsetAlignment);
-
-    bufferDesc.size             = uniformStride + sizeof(MyUniforms);
+    bufferDesc.size             = sizeof(MyUniforms);
     bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
     bufferDesc.mappedAtCreation = false;
     uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
-    // Upload uniform
     MyUniforms uniforms;
     uniforms.time  = 1.0f;
     uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
-    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
-    uniforms.time  = -1.0f;
-    uniforms.color = {1.0f, 1.0f, 1.0f, 0.7f};
-    wgpuQueueWriteBuffer(queue, uniformBuffer, uniformStride, &uniforms, sizeof(MyUniforms));
+    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 }
 
 void Application::InitializeBindGroups()
@@ -595,12 +566,6 @@ WGPUTextureView Application::GetNextSurfaceTextureView()
     wgpuTextureRelease(surfaceTexture.texture);
 
     return targetView;
-}
-
-uint32_t Application::CeilToNextMultiple(uint32_t value, uint32_t step)
-{
-    uint32_t divideAndCeil = value / step + (value % step == 0 ? 0 : 1);
-    return step * divideAndCeil;
 }
 
 void Application::SetDefaultLimits(WGPULimits& limits) const
