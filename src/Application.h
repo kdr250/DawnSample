@@ -9,6 +9,13 @@
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
+struct VertexAttributes
+{
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec3 color;
+};
+
 class Application
 {
 public:
@@ -36,13 +43,6 @@ private:
         float _pad[3];
     };
 
-    struct VertexAttributes
-    {
-        glm::vec3 position;
-        glm::vec3 normal;
-        glm::vec3 color;
-    };
-
     static_assert(sizeof(MyUniforms) % 16 == 0);  // Have the compiler check byte alignment
 
     void SetDefaultLimits(WGPULimits& limits) const;
@@ -67,8 +67,8 @@ private:
     WGPUSurface surface;
     WGPURenderPipeline pipeline;
     WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-    WGPUBuffer pointBuffer;
-    WGPUBuffer indexBuffer;
+    WGPUBuffer vertexBuffer;
+    //WGPUBuffer indexBuffer;
     uint32_t indexCount;
     WGPUBuffer uniformBuffer;
     WGPUBindGroupLayout bindGroupLayout;
