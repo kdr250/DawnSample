@@ -12,8 +12,6 @@
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
-constexpr float PI = 3.14159265358979323846f;
-
 bool Application::Initialize()
 {
     // Init SDL
@@ -160,6 +158,9 @@ bool Application::Initialize()
 void Application::Terminate()
 {
     // Terminate WebGPU
+    wgpuTextureViewRelease(textureView);
+    wgpuTextureDestroy(texture);
+    wgpuTextureRelease(texture);
     wgpuTextureViewRelease(depthTextureView);
     wgpuTextureDestroy(depthTexture);
     wgpuTextureRelease(depthTexture);
@@ -218,21 +219,6 @@ void Application::MainLoop()
                          offsetof(MyUniforms, time),
                          &uniforms.time,
                          sizeof(MyUniforms::time));
-
-    // Update view matrix
-    float angle1   = uniforms.time;
-    glm::mat4x4 R1 = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    // Scale the object
-    glm::mat4x4 S = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-
-    // Translate the object
-    glm::mat4x4 T1       = glm::mat4x4(1.0);
-    uniforms.modelMatrix = R1 * T1 * S;
-    wgpuQueueWriteBuffer(queue,
-                         uniformBuffer,
-                         offsetof(MyUniforms, modelMatrix),
-                         &uniforms.modelMatrix,
-                         sizeof(MyUniforms::modelMatrix));
 
     // Get the next target texture view
     WGPUTextureView targetView = GetNextSurfaceTextureView();
@@ -507,20 +493,30 @@ void Application::InitializePipeline()
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
     // Describe pipeline layout
-    // Define binding layout
-    WGPUBindGroupLayoutEntry bindingLayout {};
+    // Create binding layouts
+    std::vector<WGPUBindGroupLayoutEntry> bindingLayoutEntries(2);
+
+    // for uniform buffer
+    WGPUBindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
     SetDefaultBindGroupLayout(bindingLayout);
     bindingLayout.binding = 0;  // The binding index as used in the @binding attribute in the shader
     bindingLayout.visibility            = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
     bindingLayout.buffer.type           = WGPUBufferBindingType_Uniform;
     bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
+    // for texture binding
+    WGPUBindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
+    SetDefaultBindGroupLayout(textureBindingLayout);
+    textureBindingLayout.binding               = 1;
+    textureBindingLayout.visibility            = WGPUShaderStage_Fragment;
+    textureBindingLayout.texture.sampleType    = WGPUTextureSampleType_Float;
+    textureBindingLayout.texture.viewDimension = WGPUTextureViewDimension_2D;
+
     // Create a bind group layout
     WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc {};
     bindGroupLayoutDesc.nextInChain = nullptr;
-    bindGroupLayoutDesc.entryCount  = 1;
-    bindGroupLayoutDesc.entryCount  = 1;
-    bindGroupLayoutDesc.entries     = &bindingLayout;
+    bindGroupLayoutDesc.entryCount  = static_cast<uint32_t>(bindingLayoutEntries.size());
+    bindGroupLayoutDesc.entries     = bindingLayoutEntries.data();
     bindGroupLayout                 = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDesc);
 
     // Create pipeline layout
@@ -563,6 +559,68 @@ void Application::InitializePipeline()
     depthTextureViewDesc.format          = depthTextureFormat;
     depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
 
+    // Create the color texture
+    WGPUTextureDescriptor textureDesc;
+    textureDesc.nextInChain     = nullptr;
+    textureDesc.label           = WebGPUUtils::GenerateString("Texture");
+    textureDesc.dimension       = WGPUTextureDimension_2D;
+    textureDesc.size            = {256, 256, 1};
+    textureDesc.mipLevelCount   = 1;
+    textureDesc.sampleCount     = 1;
+    textureDesc.format          = WGPUTextureFormat_RGBA8Unorm;
+    textureDesc.usage           = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
+    textureDesc.viewFormatCount = 0;
+    textureDesc.viewFormats     = nullptr;
+    texture                     = wgpuDeviceCreateTexture(device, &textureDesc);
+
+    WGPUTextureViewDescriptor textureViewDesc;
+    textureViewDesc.nextInChain     = nullptr;
+    textureViewDesc.label           = WebGPUUtils::GenerateString("Texture View");
+    textureViewDesc.aspect          = WGPUTextureAspect_All;
+    textureViewDesc.baseArrayLayer  = 0;
+    textureViewDesc.arrayLayerCount = 1;
+    textureViewDesc.baseMipLevel    = 0;
+    textureViewDesc.mipLevelCount   = 1;
+    textureViewDesc.dimension       = WGPUTextureViewDimension_2D;
+#ifndef __EMSCRIPTEN__
+    textureViewDesc.usage = WGPUTextureUsage_None;
+#endif
+    textureViewDesc.format = textureDesc.format;
+    textureView            = wgpuTextureCreateView(texture, &textureViewDesc);
+
+    // Create image data
+    std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
+    for (uint32_t i = 0; i < textureDesc.size.width; ++i)
+    {
+        for (uint32_t j = 0; j < textureDesc.size.height; ++j)
+        {
+            uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
+            p[0]       = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0;  // r
+            p[1]       = ((i - j) / 16) % 2 == 0 ? 255 : 0;       // g
+            p[2]       = ((i + j) / 16) % 2 == 0 ? 255 : 0;       // b
+            p[3]       = 255;                                     // a
+        }
+    }
+
+    // Upload texture data
+    WGPUImageCopyTexture destination;
+    destination.texture  = texture;
+    destination.mipLevel = 0;
+    destination.origin   = {0, 0, 0};
+    destination.aspect   = WGPUTextureAspect_All;
+    WGPUTextureDataLayout source;
+    source.nextInChain  = nullptr;
+    source.offset       = 0;
+    source.bytesPerRow  = 4 * textureDesc.size.width;
+    source.rowsPerImage = textureDesc.size.height;
+
+    wgpuQueueWriteTexture(queue,
+                          &destination,
+                          pixels.data(),
+                          pixels.size(),
+                          &source,
+                          &textureDesc.size);
+
     wgpuShaderModuleRelease(shaderModule);
 }
 
@@ -570,7 +628,7 @@ void Application::InitializeBuffers()
 {
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
-    bool success = ResourceManager::LoadGeometryFromObj("resources/pyramid.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
     if (!success)
     {
         SDL_Log("Could not load geometry!");
@@ -596,46 +654,11 @@ void Application::InitializeBuffers()
     uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
     // Upload the initial value of the uniforms
-    // Translate the view
-    glm::vec3 focalPoint(0.0, 0.0, -1.0);
-    // Rotate the object
-    float angle1 = 2.0f;  // arbitrary time
-    // Rotate the view point
-    float angle2 = 3.0f * PI / 4.0f;
-
-    glm::mat4x4 S        = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-    glm::mat4x4 T1       = glm::mat4x4(1.0);
-    glm::mat4x4 R1       = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    uniforms.modelMatrix = R1 * T1 * S;
-
-    glm::mat4x4 R2      = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
-    glm::mat4x4 T2      = glm::translate(glm::mat4x4(1.0), -focalPoint);
-    uniforms.viewMatrix = T2 * R2;
-
-    float ratio               = 640.0f / 480.0f;
-    float focalLength         = 2.0;
-    float near                = 0.01f;
-    float far                 = 100.0f;
-    float divider             = 1 / (focalLength * (far - near));
-    uniforms.projectionMatrix = glm::transpose(glm::mat4x4(1.0,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           ratio,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           far * divider,
-                                                           -far * near * divider,
-                                                           0.0,
-                                                           0.0,
-                                                           1.0 / focalLength,
-                                                           0.0));
-
-    uniforms.time  = 1.0f;
-    uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
+    uniforms.modelMatrix      = glm::mat4x4(1.0);
+    uniforms.viewMatrix       = glm::scale(glm::mat4x4(1.0), glm::vec3(1.0f));
+    uniforms.projectionMatrix = glm::ortho(-1, 1, -1, 1, -1, 1);
+    uniforms.time             = 1.0f;
+    uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
 
     wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 }
@@ -643,20 +666,25 @@ void Application::InitializeBuffers()
 void Application::InitializeBindGroups()
 {
     // Create a binding
-    WGPUBindGroupEntry binding {};
-    binding.nextInChain = nullptr;
-    binding.binding     = 0;
-    binding.buffer      = uniformBuffer;
-    binding.offset      = 0;
-    binding.size        = sizeof(MyUniforms);
+    std::vector<WGPUBindGroupEntry> bindings(2);
+
+    bindings[0].nextInChain = nullptr;
+    bindings[0].binding     = 0;
+    bindings[0].buffer      = uniformBuffer;
+    bindings[0].offset      = 0;
+    bindings[0].size        = sizeof(MyUniforms);
+
+    bindings[1].nextInChain = nullptr;
+    bindings[1].binding     = 1;
+    bindings[1].textureView = textureView;
 
     // A bind group contains one or multiple bindings
     WGPUBindGroupDescriptor bindGroupDesc;
     bindGroupDesc.nextInChain = nullptr;
     bindGroupDesc.label       = WebGPUUtils::GenerateString("Bind Group");
     bindGroupDesc.layout      = bindGroupLayout;
-    bindGroupDesc.entryCount  = 1;
-    bindGroupDesc.entries     = &binding;
+    bindGroupDesc.entryCount  = static_cast<uint32_t>(bindings.size());
+    bindGroupDesc.entries     = bindings.data();
     bindGroup                 = wgpuDeviceCreateBindGroup(device, &bindGroupDesc);
 }
 
