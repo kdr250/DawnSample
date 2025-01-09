@@ -68,7 +68,6 @@ private:
     WGPURenderPipeline pipeline;
     WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
     WGPUBuffer vertexBuffer;
-    //WGPUBuffer indexBuffer;
     uint32_t indexCount;
     WGPUBuffer uniformBuffer;
     WGPUBindGroupLayout bindGroupLayout;
@@ -76,6 +75,8 @@ private:
     WGPUPipelineLayout layout;
     WGPUTexture depthTexture;
     WGPUTextureView depthTextureView;
+    WGPUTexture texture;
+    WGPUTextureView textureView;
 
     MyUniforms uniforms;
 
