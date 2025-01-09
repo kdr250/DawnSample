@@ -21,6 +21,16 @@ public:
     static bool LoadGeometryFromObj(const std::filesystem::path& path,
                                     std::vector<VertexAttributes>& vertexData);
 
+    static WGPUTexture LoadTexture(const std::filesystem::path& path,
+                                   WGPUDevice device,
+                                   WGPUTextureView* pTextureView = nullptr);
+
+    static void WriteMipMaps(WGPUDevice device,
+                             WGPUTexture texture,
+                             WGPUExtent3D textureSize,
+                             uint32_t mipLevelCount,
+                             const unsigned char* pixelData);
+
     /**
 	 * Create a shader module for a given WebGPU `device` from a WGSL shader source
 	 * loaded from file `path`.
