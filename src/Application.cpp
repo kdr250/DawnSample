@@ -613,6 +613,8 @@ void Application::InitializePipeline()
 
     // Create a sampler
     WGPUSamplerDescriptor samplerDesc;
+    samplerDesc.nextInChain   = nullptr;
+    samplerDesc.label         = WebGPUUtils::GenerateString("Sampler");
     samplerDesc.addressModeU  = WGPUAddressMode_Repeat;
     samplerDesc.addressModeV  = WGPUAddressMode_Repeat;
     samplerDesc.addressModeW  = WGPUAddressMode_Repeat;
