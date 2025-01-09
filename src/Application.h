@@ -78,6 +78,7 @@ private:
     WGPUTextureView depthTextureView;
     WGPUTexture texture;
     WGPUTextureView textureView;
+    WGPUSampler sampler;
 
     MyUniforms uniforms;
 
