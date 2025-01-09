@@ -12,6 +12,8 @@
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
+constexpr float PI = 3.14159265358979323846f;
+
 bool Application::Initialize()
 {
     // Init SDL
@@ -317,11 +319,11 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     SetDefaultLimits(requiredLimits.limits);
 
     // vertex and shader
-    requiredLimits.limits.maxVertexAttributes           = 3;
+    requiredLimits.limits.maxVertexAttributes           = 4;
     requiredLimits.limits.maxVertexBuffers              = 1;
     requiredLimits.limits.maxBufferSize                 = 10000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride    = sizeof(VertexAttributes);
-    requiredLimits.limits.maxInterStageShaderComponents = 6;
+    requiredLimits.limits.maxInterStageShaderComponents = 8;
 
     // uniform
     requiredLimits.limits.maxBindGroups                   = 1;
@@ -421,7 +423,7 @@ void Application::InitializePipeline()
 
     // Describe vertex pipeline
     WGPUVertexBufferLayout vertexBufferLayout {};
-    std::vector<WGPUVertexAttribute> vertexAttribs(3);
+    std::vector<WGPUVertexAttribute> vertexAttribs(4);
     vertexAttribs[0].shaderLocation = 0;  // Describe the position attribute
     vertexAttribs[0].format         = WGPUVertexFormat_Float32x3;
     vertexAttribs[0].offset         = offsetof(VertexAttributes, position);
@@ -431,6 +433,9 @@ void Application::InitializePipeline()
     vertexAttribs[2].shaderLocation = 2;  // Describe the color attribute
     vertexAttribs[2].format         = WGPUVertexFormat_Float32x3;
     vertexAttribs[2].offset         = offsetof(VertexAttributes, color);
+    vertexAttribs[3].shaderLocation = 3;  // Describe the uv attribute
+    vertexAttribs[3].format         = WGPUVertexFormat_Float32x2;
+    vertexAttribs[3].offset         = offsetof(VertexAttributes, uv);
 
     vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
     vertexBufferLayout.attributes     = vertexAttribs.data();
@@ -628,7 +633,7 @@ void Application::InitializeBuffers()
 {
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
-    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/cube.obj", vertexData);
     if (!success)
     {
         SDL_Log("Could not load geometry!");
@@ -654,9 +659,10 @@ void Application::InitializeBuffers()
     uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
     // Upload the initial value of the uniforms
-    uniforms.modelMatrix      = glm::mat4x4(1.0);
-    uniforms.viewMatrix       = glm::scale(glm::mat4x4(1.0), glm::vec3(1.0f));
-    uniforms.projectionMatrix = glm::ortho(-1, 1, -1, 1, -1, 1);
+    uniforms.modelMatrix = glm::mat4x4(1.0);
+    uniforms.viewMatrix =
+        glm::lookAt(glm::vec3(-2.0f, -3.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
     uniforms.time             = 1.0f;
     uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
 
