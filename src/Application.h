@@ -76,7 +76,7 @@ private:
     WGPUPipelineLayout layout;
     WGPUTexture depthTexture;
     WGPUTextureView depthTextureView;
-    WGPUTexture texture;
+    WGPUTexture texture         = nullptr;
     WGPUTextureView textureView = nullptr;
     WGPUSampler sampler;
 

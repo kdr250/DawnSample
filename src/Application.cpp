@@ -590,7 +590,7 @@ void Application::InitializePipeline()
     sampler                   = wgpuDeviceCreateSampler(device, &samplerDesc);
 
     // Create texture
-    WGPUTexture texture =
+    texture =
         ResourceManager::LoadTexture("resources/fourareen2K_albedo.jpg", device, &textureView);
 
     if (!texture)

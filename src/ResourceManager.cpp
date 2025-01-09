@@ -225,11 +225,17 @@ void ResourceManager::WriteMipMaps(WGPUDevice device,
     WGPUQueue queue = wgpuDeviceGetQueue(device);
 
     WGPUImageCopyTexture destination;
+#ifdef __EMSCRIPTEN__
+    destination.nextInChain = nullptr;
+#endif
     destination.texture = texture;
     destination.origin  = {0, 0, 0};
     destination.aspect  = WGPUTextureAspect_All;
 
     WGPUTextureDataLayout source;
+#ifdef __EMSCRIPTEN__
+    source.nextInChain = nullptr;
+#endif
     source.offset = 0;
 
     WGPUExtent3D mipLevelSize = textureSize;
