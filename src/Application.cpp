@@ -16,6 +16,150 @@ constexpr float PI = 3.14159265358979323846f;
 
 bool Application::Initialize()
 {
+    return InitializeWindowAndDevice() && InitializeDepthBuffer() && InitializePipeline()
+           && InitializeTexture() && InitializeGeometry() && InitializeUniforms()
+           && InitializeBindGroups();
+}
+
+void Application::Terminate()
+{
+    TerminateBindGroups();
+    TerminateUniforms();
+    TerminateGeometry();
+    TerminateTexture();
+    TerminatePipeline();
+    TerminateDepthBuffer();
+    TerminateWindowAndDevice();
+}
+
+void Application::MainLoop()
+{
+    if (!isRunning)
+    {
+#ifdef __EMSCRIPTEN__
+        emscripten_cancel_main_loop(); /* this should "kill" the app. */
+        Terminate();
+        return;
+#endif
+    }
+
+    // process input
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        switch (event.type)
+        {
+            case SDL_QUIT:
+                isRunning = false;
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    const Uint8* state = SDL_GetKeyboardState(NULL);
+    if (state[SDL_SCANCODE_ESCAPE])
+    {
+        isRunning = false;
+    }
+
+    // Update uniform buffer
+    uniforms.time = SDL_GetTicks64() / 1000.0f;
+    wgpuQueueWriteBuffer(queue,
+                         uniformBuffer,
+                         offsetof(MyUniforms, time),
+                         &uniforms.time,
+                         sizeof(MyUniforms::time));
+
+    // Get the next target texture view
+    WGPUTextureView targetView = GetNextSurfaceTextureView();
+    if (!targetView)
+    {
+        return;
+    }
+
+    // Create a command encoder for the draw call
+    WGPUCommandEncoderDescriptor encoderDesc = {};
+    encoderDesc.nextInChain                  = nullptr;
+    encoderDesc.label                        = WebGPUUtils::GenerateString("My command encoder");
+    WGPUCommandEncoder encoder               = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+
+    // Create the render pass that clears the screen with our color
+    WGPURenderPassDescriptor renderPassDesc = {};
+    renderPassDesc.nextInChain              = nullptr;
+
+    // The attachment part of the render pass descriptor describes the target texture of the pass
+    WGPURenderPassColorAttachment renderPassColorAttachment = {};
+    renderPassColorAttachment.view                          = targetView;
+    renderPassColorAttachment.resolveTarget                 = nullptr;
+    renderPassColorAttachment.loadOp                        = WGPULoadOp_Clear;
+    renderPassColorAttachment.storeOp                       = WGPUStoreOp_Store;
+    renderPassColorAttachment.clearValue                    = WGPUColor {0.05, 0.05, 0.05, 1.0};
+    renderPassColorAttachment.depthSlice                    = WGPU_DEPTH_SLICE_UNDEFINED;
+
+    renderPassDesc.colorAttachmentCount = 1;
+    renderPassDesc.colorAttachments     = &renderPassColorAttachment;
+
+    WGPURenderPassDepthStencilAttachment depthStencilAttachment;
+    depthStencilAttachment.view              = depthTextureView;
+    depthStencilAttachment.depthClearValue   = 1.0f;
+    depthStencilAttachment.depthLoadOp       = WGPULoadOp_Clear;
+    depthStencilAttachment.depthStoreOp      = WGPUStoreOp_Store;
+    depthStencilAttachment.depthReadOnly     = false;
+    depthStencilAttachment.stencilClearValue = 0;
+    depthStencilAttachment.stencilLoadOp     = WGPULoadOp_Undefined;
+    depthStencilAttachment.stencilStoreOp    = WGPUStoreOp_Undefined;
+    depthStencilAttachment.stencilReadOnly   = true;
+
+    renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
+    renderPassDesc.timestampWrites        = nullptr;
+
+    // Create the render pass and end it immediately (we only clear the screen but do not draw anything)
+    WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+
+    // set pipeline to renderpass and draw
+    wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
+    wgpuRenderPassEncoderSetVertexBuffer(renderPass,
+                                         0,
+                                         vertexBuffer,
+                                         0,
+                                         wgpuBufferGetSize(vertexBuffer));
+    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
+    wgpuRenderPassEncoderDraw(renderPass, indexCount, 1, 0, 0);
+
+    wgpuRenderPassEncoderEnd(renderPass);
+    wgpuRenderPassEncoderRelease(renderPass);
+
+    // Finally encode and submit the render pass
+    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+    cmdBufferDescriptor.nextInChain                 = nullptr;
+    cmdBufferDescriptor.label                       = WebGPUUtils::GenerateString("Command buffer");
+
+    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+    wgpuCommandEncoderRelease(encoder);
+
+    wgpuQueueSubmit(queue, 1, &command);
+    wgpuCommandBufferRelease(command);
+
+    // At the end of the frame
+    wgpuTextureViewRelease(targetView);
+
+#ifndef __EMSCRIPTEN__
+    wgpuSurfacePresent(surface);
+#endif
+
+    // tick
+    WebGPUUtils::DeviceTick(device);
+}
+
+bool Application::IsRunning()
+{
+    return isRunning;
+}
+
+bool Application::InitializeWindowAndDevice()
+{
     // Init SDL
     SDL_Init(SDL_INIT_VIDEO);
     window = SDL_CreateWindow("Dawn Sample",
@@ -150,31 +294,15 @@ bool Application::Initialize()
 
     wgpuAdapterRelease(adapter);
 
-    InitializePipeline();
-    InitializeBuffers();
-    InitializeBindGroups();
-
     return true;
 }
 
-void Application::Terminate()
+void Application::TerminateWindowAndDevice()
 {
     // Terminate WebGPU
-    wgpuTextureViewRelease(textureView);
-    wgpuTextureDestroy(texture);
-    wgpuTextureRelease(texture);
-    wgpuTextureViewRelease(depthTextureView);
-    wgpuTextureDestroy(depthTexture);
-    wgpuTextureRelease(depthTexture);
-    wgpuBindGroupRelease(bindGroup);
-    wgpuPipelineLayoutRelease(layout);
-    wgpuBindGroupLayoutRelease(bindGroupLayout);
-    wgpuBufferRelease(uniformBuffer);
-    wgpuBufferRelease(vertexBuffer);
-    wgpuRenderPipelineRelease(pipeline);
     wgpuSurfaceUnconfigure(surface);
-    wgpuQueueRelease(queue);
     wgpuSurfaceRelease(surface);
+    wgpuQueueRelease(queue);
     wgpuDeviceRelease(device);
 
     // Terminate SDL
@@ -182,130 +310,46 @@ void Application::Terminate()
     SDL_Quit();
 }
 
-void Application::MainLoop()
+bool Application::InitializeDepthBuffer()
 {
-    if (!isRunning)
-    {
-#ifdef __EMSCRIPTEN__
-        emscripten_cancel_main_loop(); /* this should "kill" the app. */
-        Terminate();
-        return;
-#endif
-    }
+    // Create the depth texture
+    WGPUTextureDescriptor depthTextureDesc;
+    depthTextureDesc.nextInChain     = nullptr;
+    depthTextureDesc.label           = WebGPUUtils::GenerateString("Depth Texture");
+    depthTextureDesc.dimension       = WGPUTextureDimension_2D;
+    depthTextureDesc.format          = depthTextureFormat;
+    depthTextureDesc.mipLevelCount   = 1;
+    depthTextureDesc.sampleCount     = 1;
+    depthTextureDesc.size            = {1024, 768, 1};
+    depthTextureDesc.usage           = WGPUTextureUsage_RenderAttachment;
+    depthTextureDesc.viewFormatCount = 1;
+    depthTextureDesc.viewFormats     = (WGPUTextureFormat*)&depthTextureFormat;
+    depthTexture                     = wgpuDeviceCreateTexture(device, &depthTextureDesc);
 
-    // process input
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
-        switch (event.type)
-        {
-            case SDL_QUIT:
-                isRunning = false;
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    const Uint8* state = SDL_GetKeyboardState(NULL);
-    if (state[SDL_SCANCODE_ESCAPE])
-    {
-        isRunning = false;
-    }
-
-    // Update uniform buffer
-    uniforms.time = SDL_GetTicks64() / 1000.0f;
-    wgpuQueueWriteBuffer(queue,
-                         uniformBuffer,
-                         offsetof(MyUniforms, time),
-                         &uniforms.time,
-                         sizeof(MyUniforms::time));
-
-    // Get the next target texture view
-    WGPUTextureView targetView = GetNextSurfaceTextureView();
-    if (!targetView)
-    {
-        return;
-    }
-
-    // Create a command encoder for the draw call
-    WGPUCommandEncoderDescriptor encoderDesc = {};
-    encoderDesc.nextInChain                  = nullptr;
-    encoderDesc.label                        = WebGPUUtils::GenerateString("My command encoder");
-    WGPUCommandEncoder encoder               = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
-
-    // Create the render pass that clears the screen with our color
-    WGPURenderPassDescriptor renderPassDesc = {};
-    renderPassDesc.nextInChain              = nullptr;
-
-    // The attachment part of the render pass descriptor describes the target texture of the pass
-    WGPURenderPassColorAttachment renderPassColorAttachment = {};
-    renderPassColorAttachment.view                          = targetView;
-    renderPassColorAttachment.resolveTarget                 = nullptr;
-    renderPassColorAttachment.loadOp                        = WGPULoadOp_Clear;
-    renderPassColorAttachment.storeOp                       = WGPUStoreOp_Store;
-    renderPassColorAttachment.clearValue                    = WGPUColor {0.05, 0.05, 0.05, 1.0};
-    renderPassColorAttachment.depthSlice                    = WGPU_DEPTH_SLICE_UNDEFINED;
-
-    renderPassDesc.colorAttachmentCount = 1;
-    renderPassDesc.colorAttachments     = &renderPassColorAttachment;
-
-    WGPURenderPassDepthStencilAttachment depthStencilAttachment;
-    depthStencilAttachment.view              = depthTextureView;
-    depthStencilAttachment.depthClearValue   = 1.0f;
-    depthStencilAttachment.depthLoadOp       = WGPULoadOp_Clear;
-    depthStencilAttachment.depthStoreOp      = WGPUStoreOp_Store;
-    depthStencilAttachment.depthReadOnly     = false;
-    depthStencilAttachment.stencilClearValue = 0;
-    depthStencilAttachment.stencilLoadOp     = WGPULoadOp_Undefined;
-    depthStencilAttachment.stencilStoreOp    = WGPUStoreOp_Undefined;
-    depthStencilAttachment.stencilReadOnly   = true;
-
-    renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
-    renderPassDesc.timestampWrites        = nullptr;
-
-    // Create the render pass and end it immediately (we only clear the screen but do not draw anything)
-    WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
-
-    // set pipeline to renderpass and draw
-    wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(renderPass,
-                                         0,
-                                         vertexBuffer,
-                                         0,
-                                         wgpuBufferGetSize(vertexBuffer));
-    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
-    wgpuRenderPassEncoderDraw(renderPass, indexCount, 1, 0, 0);
-
-    wgpuRenderPassEncoderEnd(renderPass);
-    wgpuRenderPassEncoderRelease(renderPass);
-
-    // Finally encode and submit the render pass
-    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-    cmdBufferDescriptor.nextInChain                 = nullptr;
-    cmdBufferDescriptor.label                       = WebGPUUtils::GenerateString("Command buffer");
-
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
-    wgpuCommandEncoderRelease(encoder);
-
-    wgpuQueueSubmit(queue, 1, &command);
-    wgpuCommandBufferRelease(command);
-
-    // At the end of the frame
-    wgpuTextureViewRelease(targetView);
-
+    // Create the view of the depth texture manipulated by the rasterizer
+    WGPUTextureViewDescriptor depthTextureViewDesc;
+    depthTextureViewDesc.nextInChain = nullptr;
+    depthTextureViewDesc.label       = WebGPUUtils::GenerateString("Depth Texture View");
+    depthTextureViewDesc.aspect      = WGPUTextureAspect_DepthOnly;
 #ifndef __EMSCRIPTEN__
-    wgpuSurfacePresent(surface);
+    depthTextureViewDesc.usage = WGPUTextureUsage_None;
 #endif
+    depthTextureViewDesc.baseArrayLayer  = 0;
+    depthTextureViewDesc.arrayLayerCount = 1;
+    depthTextureViewDesc.baseMipLevel    = 0;
+    depthTextureViewDesc.mipLevelCount   = 1;
+    depthTextureViewDesc.dimension       = WGPUTextureViewDimension_2D;
+    depthTextureViewDesc.format          = depthTextureFormat;
+    depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
 
-    // tick
-    WebGPUUtils::DeviceTick(device);
+    return true;
 }
 
-bool Application::IsRunning()
+void Application::TerminateDepthBuffer()
 {
-    return isRunning;
+    wgpuTextureViewRelease(depthTextureView);
+    wgpuTextureDestroy(depthTexture);
+    wgpuTextureRelease(depthTexture);
 }
 
 WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
@@ -407,7 +451,7 @@ void Application::SetDefaultDepthStencilState(WGPUDepthStencilState& depthStenci
     SetDefaultStencilFaceState(depthStencilState.stencilBack);
 }
 
-void Application::InitializePipeline()
+bool Application::InitializePipeline()
 {
     // Load the shader module
     WGPUShaderModule shaderModule =
@@ -486,13 +530,12 @@ void Application::InitializePipeline()
     // Describe stencil/depth pipeline
     WGPUDepthStencilState depthStencilState;
     SetDefaultDepthStencilState(depthStencilState);
-    depthStencilState.depthCompare       = WGPUCompareFunction_Less;
-    depthStencilState.depthWriteEnabled  = WebGPUUtils::GenerateBool(true);
-    WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
-    depthStencilState.format             = depthTextureFormat;
-    depthStencilState.stencilReadMask    = 0;
-    depthStencilState.stencilWriteMask   = 0;
-    pipelineDesc.depthStencil            = &depthStencilState;
+    depthStencilState.depthCompare      = WGPUCompareFunction_Less;
+    depthStencilState.depthWriteEnabled = WebGPUUtils::GenerateBool(true);
+    depthStencilState.format            = depthTextureFormat;
+    depthStencilState.stencilReadMask   = 0;
+    depthStencilState.stencilWriteMask  = 0;
+    pipelineDesc.depthStencil           = &depthStencilState;
 
     // Describe multi-sampling pipeline
     pipelineDesc.multisample.count                  = 1;
@@ -543,36 +586,20 @@ void Application::InitializePipeline()
 
     pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
-    // Create the depth texture
-    WGPUTextureDescriptor depthTextureDesc;
-    depthTextureDesc.nextInChain     = nullptr;
-    depthTextureDesc.label           = WebGPUUtils::GenerateString("Depth Texture");
-    depthTextureDesc.dimension       = WGPUTextureDimension_2D;
-    depthTextureDesc.format          = depthTextureFormat;
-    depthTextureDesc.mipLevelCount   = 1;
-    depthTextureDesc.sampleCount     = 1;
-    depthTextureDesc.size            = {1024, 768, 1};
-    depthTextureDesc.usage           = WGPUTextureUsage_RenderAttachment;
-    depthTextureDesc.viewFormatCount = 1;
-    depthTextureDesc.viewFormats     = (WGPUTextureFormat*)&depthTextureFormat;
-    depthTexture                     = wgpuDeviceCreateTexture(device, &depthTextureDesc);
+    wgpuShaderModuleRelease(shaderModule);
 
-    // Create the view of the depth texture manipulated by the rasterizer
-    WGPUTextureViewDescriptor depthTextureViewDesc;
-    depthTextureViewDesc.nextInChain = nullptr;
-    depthTextureViewDesc.label       = WebGPUUtils::GenerateString("Depth Texture View");
-    depthTextureViewDesc.aspect      = WGPUTextureAspect_DepthOnly;
-#ifndef __EMSCRIPTEN__
-    depthTextureViewDesc.usage = WGPUTextureUsage_None;
-#endif
-    depthTextureViewDesc.baseArrayLayer  = 0;
-    depthTextureViewDesc.arrayLayerCount = 1;
-    depthTextureViewDesc.baseMipLevel    = 0;
-    depthTextureViewDesc.mipLevelCount   = 1;
-    depthTextureViewDesc.dimension       = WGPUTextureViewDimension_2D;
-    depthTextureViewDesc.format          = depthTextureFormat;
-    depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
+    return true;
+}
 
+void Application::TerminatePipeline()
+{
+    wgpuBindGroupLayoutRelease(bindGroupLayout);
+    wgpuRenderPipelineRelease(pipeline);
+    wgpuPipelineLayoutRelease(layout);
+}
+
+bool Application::InitializeTexture()
+{
     // Create a sampler
     WGPUSamplerDescriptor samplerDesc;
     samplerDesc.nextInChain   = nullptr;
@@ -596,13 +623,21 @@ void Application::InitializePipeline()
     if (!texture)
     {
         SDL_Log("Could not load texture!");
-        exit(EXIT_FAILURE);
+        return false;
     }
 
-    wgpuShaderModuleRelease(shaderModule);
+    return true;
 }
 
-void Application::InitializeBuffers()
+void Application::TerminateTexture()
+{
+    wgpuTextureViewRelease(textureView);
+    wgpuTextureDestroy(texture);
+    wgpuTextureRelease(texture);
+    wgpuSamplerRelease(sampler);
+}
+
+bool Application::InitializeGeometry()
 {
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
@@ -610,7 +645,7 @@ void Application::InitializeBuffers()
     if (!success)
     {
         SDL_Log("Could not load geometry!");
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     indexCount = static_cast<uint32_t>(vertexData.size());
@@ -625,7 +660,19 @@ void Application::InitializeBuffers()
 
     wgpuQueueWriteBuffer(queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
+    return true;
+}
+
+void Application::TerminateGeometry()
+{
+    wgpuBufferRelease(vertexBuffer);
+}
+
+bool Application::InitializeUniforms()
+{
     // Create uniform buffer
+    WGPUBufferDescriptor bufferDesc {};
+    bufferDesc.nextInChain      = nullptr;
     bufferDesc.size             = sizeof(MyUniforms);
     bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
     bufferDesc.mappedAtCreation = false;
@@ -640,9 +687,16 @@ void Application::InitializeBuffers()
     uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
 
     wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+
+    return true;
 }
 
-void Application::InitializeBindGroups()
+void Application::TerminateUniforms()
+{
+    wgpuBufferRelease(uniformBuffer);
+}
+
+bool Application::InitializeBindGroups()
 {
     // Create a binding
     std::vector<WGPUBindGroupEntry> bindings(3);
@@ -669,6 +723,13 @@ void Application::InitializeBindGroups()
     bindGroupDesc.entryCount  = static_cast<uint32_t>(bindings.size());
     bindGroupDesc.entries     = bindings.data();
     bindGroup                 = wgpuDeviceCreateBindGroup(device, &bindGroupDesc);
+
+    return true;
+}
+
+void Application::TerminateBindGroups()
+{
+    wgpuBindGroupRelease(bindGroup);
 }
 
 WGPUTextureView Application::GetNextSurfaceTextureView()
