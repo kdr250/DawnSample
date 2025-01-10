@@ -53,6 +53,19 @@ void Application::MainLoop()
                 isRunning = false;
                 break;
 
+            case SDL_MOUSEMOTION:
+                OnMouseMove();
+                break;
+
+            case SDL_MOUSEWHEEL:
+                OnScroll(event);
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+                OnMouseButton(event);
+                break;
+
             default:
                 break;
         }
@@ -762,6 +775,79 @@ WGPUTextureView Application::GetNextSurfaceTextureView()
     wgpuTextureRelease(surfaceTexture.texture);
 
     return targetView;
+}
+
+void Application::UpdateViewMatrix()
+{
+    float cx            = std::cos(cameraState.angles.x);
+    float sx            = std::sin(cameraState.angles.x);
+    float cy            = std::cos(cameraState.angles.y);
+    float sy            = std::sin(cameraState.angles.y);
+    glm::vec3 position  = glm::vec3(cx * cy, sx * cy, sy) * std::exp(-cameraState.zoom);
+    uniforms.viewMatrix = glm::lookAt(position, glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    wgpuQueueWriteBuffer(queue,
+                         uniformBuffer,
+                         offsetof(MyUniforms, viewMatrix),
+                         &uniforms.viewMatrix,
+                         sizeof(MyUniforms::viewMatrix));
+}
+
+void Application::OnMouseMove()
+{
+    if (!dragState.active)
+    {
+        return;
+    }
+
+    SDL_SetRelativeMouseMode(SDL_FALSE);
+
+    int x = 0, y = 0;
+    SDL_GetMouseState(&x, &y);
+
+    glm::vec2 currentMouse = glm::vec2(-(float)x, (float)y);
+    glm::vec2 delta        = (currentMouse - dragState.startMouse) * dragState.sensitivity;
+    cameraState.angles     = dragState.startCameraState.angles + delta;
+    // Clamp to avoid going too far when orbitting up/down
+    cameraState.angles.y = glm::clamp(cameraState.angles.y, -PI / 2 + 1e-5f, PI / 2 - 1e-5f);
+    UpdateViewMatrix();
+
+    // Inertia
+    dragState.velocity      = delta - dragState.previousDelta;
+    dragState.previousDelta = delta;
+}
+
+void Application::OnMouseButton(SDL_Event& event)
+{
+    static constexpr int LEFT_BUTTON = 1;
+    if (!SDL_BUTTON(LEFT_BUTTON))
+    {
+        return;
+    }
+
+    bool isPressed = event.type == SDL_MOUSEBUTTONDOWN ? true : false;
+    if (isPressed)
+    {
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+
+        dragState.active = true;
+        int x = 0, y = 0;
+        SDL_GetRelativeMouseState(&x, &y);
+        dragState.startMouse       = glm::vec2(-(float)x, (float)y);
+        dragState.startCameraState = cameraState;
+    }
+    else
+    {
+        dragState.active = false;
+    }
+}
+
+void Application::OnScroll(SDL_Event& event)
+{
+    assert(event.type == SDL_MOUSEWHEEL);
+
+    cameraState.zoom += dragState.scrollSensitivity * static_cast<float>(event.wheel.y);
+    cameraState.zoom = glm::clamp(cameraState.zoom, -2.0f, 2.0f);
+    UpdateViewMatrix();
 }
 
 void Application::SetDefaultLimits(WGPULimits& limits) const
