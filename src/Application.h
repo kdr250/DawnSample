@@ -64,6 +64,13 @@ private:
 
     WGPUTextureView GetNextSurfaceTextureView();
 
+    void UpdateViewMatrix();
+
+    // Mouse
+    void OnMouseMove();
+    void OnMouseButton(SDL_Event& event);
+    void OnScroll(SDL_Event& event);
+
     struct MyUniforms
     {
         // We add transform matrices
@@ -76,6 +83,34 @@ private:
     };
 
     static_assert(sizeof(MyUniforms) % 16 == 0);  // Have the compiler check byte alignment
+
+    struct CameraState
+    {
+        // angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
+        // angles.y is the rotation of the camera around its local horizontal axis, affected by mouse.y
+        glm::vec2 angles = {0.8f, 0.5f};
+        // zoom is the position of the camera along its local forward axis, affected by the scroll wheel
+        float zoom = -1.2f;
+    };
+
+    struct DragState
+    {
+        // Whether a drag action is ongoing (i.e., we are between mouse press and mouse release)
+        bool active = false;
+        // The position of the mouse at the beginning of the drag action
+        glm::vec2 startMouse;
+        // The camera state at the beginning of the drag action
+        CameraState startCameraState;
+
+        // Constant settings
+        float sensitivity       = 0.01f;
+        float scrollSensitivity = 0.1f;
+
+        // Inertia
+        glm::vec2 velocity = {0.0, 0.0};
+        glm::vec2 previousDelta;
+        float intertia = 0.9f;
+    };
 
     SDL_Window* window                   = nullptr;
     WGPUDevice device                    = nullptr;
@@ -97,6 +132,9 @@ private:
     WGPUSampler sampler                  = nullptr;
 
     MyUniforms uniforms;
+
+    CameraState cameraState;
+    DragState dragState;
 
     bool isRunning = true;
 };
