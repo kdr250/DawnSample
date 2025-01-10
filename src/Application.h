@@ -33,6 +33,37 @@ public:
     bool IsRunning();
 
 private:
+    bool InitializeWindowAndDevice();
+    void TerminateWindowAndDevice();
+
+    bool InitializeDepthBuffer();
+    void TerminateDepthBuffer();
+
+    bool InitializePipeline();
+    void TerminatePipeline();
+
+    bool InitializeTexture();
+    void TerminateTexture();
+
+    bool InitializeGeometry();
+    void TerminateGeometry();
+
+    bool InitializeUniforms();
+    void TerminateUniforms();
+
+    bool InitializeBindGroups();
+    void TerminateBindGroups();
+
+    void SetDefaultLimits(WGPULimits& limits) const;
+    WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
+
+    void SetDefaultBindGroupLayout(WGPUBindGroupLayoutEntry& bindingLayout);
+
+    void SetDefaultStencilFaceState(WGPUStencilFaceState& stencilFaceState);
+    void SetDefaultDepthStencilState(WGPUDepthStencilState& depthStencilState);
+
+    WGPUTextureView GetNextSurfaceTextureView();
+
     struct MyUniforms
     {
         // We add transform matrices
@@ -46,39 +77,24 @@ private:
 
     static_assert(sizeof(MyUniforms) % 16 == 0);  // Have the compiler check byte alignment
 
-    void SetDefaultLimits(WGPULimits& limits) const;
-    WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
-
-    void SetDefaultBindGroupLayout(WGPUBindGroupLayoutEntry& bindingLayout);
-
-    void SetDefaultStencilFaceState(WGPUStencilFaceState& stencilFaceState);
-    void SetDefaultDepthStencilState(WGPUDepthStencilState& depthStencilState);
-
-    void InitializePipeline();
-
-    void InitializeBuffers();
-
-    void InitializeBindGroups();
-
-    WGPUTextureView GetNextSurfaceTextureView();
-
-    SDL_Window* window;
-    WGPUDevice device;
-    WGPUQueue queue;
-    WGPUSurface surface;
-    WGPURenderPipeline pipeline;
-    WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-    WGPUBuffer vertexBuffer;
-    uint32_t indexCount;
-    WGPUBuffer uniformBuffer;
-    WGPUBindGroupLayout bindGroupLayout;
-    WGPUBindGroup bindGroup;
-    WGPUPipelineLayout layout;
-    WGPUTexture depthTexture;
-    WGPUTextureView depthTextureView;
-    WGPUTexture texture         = nullptr;
-    WGPUTextureView textureView = nullptr;
-    WGPUSampler sampler;
+    SDL_Window* window                   = nullptr;
+    WGPUDevice device                    = nullptr;
+    WGPUQueue queue                      = nullptr;
+    WGPUSurface surface                  = nullptr;
+    WGPURenderPipeline pipeline          = nullptr;
+    WGPUTextureFormat surfaceFormat      = WGPUTextureFormat_Undefined;
+    WGPUBuffer vertexBuffer              = nullptr;
+    uint32_t indexCount                  = 0;
+    WGPUBuffer uniformBuffer             = nullptr;
+    WGPUBindGroupLayout bindGroupLayout  = nullptr;
+    WGPUBindGroup bindGroup              = nullptr;
+    WGPUPipelineLayout layout            = nullptr;
+    WGPUTexture depthTexture             = nullptr;
+    WGPUTextureView depthTextureView     = nullptr;
+    WGPUTextureFormat depthTextureFormat = WGPUTextureFormat_Depth24Plus;
+    WGPUTexture texture                  = nullptr;
+    WGPUTextureView textureView          = nullptr;
+    WGPUSampler sampler                  = nullptr;
 
     MyUniforms uniforms;
 
