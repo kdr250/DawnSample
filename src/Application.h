@@ -137,4 +137,7 @@ private:
     DragState dragState;
 
     bool isRunning = true;
+
+    Uint64 tickCount = 0;
+    float deltaTime  = 0.0f;
 };

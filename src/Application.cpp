@@ -77,8 +77,18 @@ void Application::MainLoop()
         isRunning = false;
     }
 
+#ifndef __EMSCRIPTEN__
+    // Wait until 16ms has elapsed since last frame
+    while (!SDL_TICKS_PASSED(SDL_GetTicks64(), tickCount + 16))
+        ;
+#endif
+
+    float delta = (SDL_GetTicks64() - tickCount) / 1000.0f;
+    deltaTime   = std::min(delta, 0.05f);
+    tickCount   = SDL_GetTicks64();
+
     // Update uniform buffer
-    uniforms.time = SDL_GetTicks64() / 1000.0f;
+    uniforms.time = tickCount / 1000.0f;
     wgpuQueueWriteBuffer(queue,
                          uniformBuffer,
                          offsetof(MyUniforms, time),
@@ -160,10 +170,8 @@ void Application::MainLoop()
 
 #ifndef __EMSCRIPTEN__
     wgpuSurfacePresent(surface);
+    wgpuDeviceTick(device);
 #endif
-
-    // tick
-    WebGPUUtils::DeviceTick(device);
 }
 
 bool Application::IsRunning()

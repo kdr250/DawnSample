@@ -67,19 +67,4 @@ namespace WebGPUUtils
     }
 #endif
 
-    /**
-     * Helper function to tick
-     */
-#ifdef __EMSCRIPTEN__
-    inline void DeviceTick(WGPUDevice /* device */)
-    {
-        emscripten_sleep(100);
-    }
-#else
-    inline void DeviceTick(WGPUDevice device)
-    {
-        wgpuDeviceTick(device);
-    }
-#endif
-
 }  // namespace WebGPUUtils
