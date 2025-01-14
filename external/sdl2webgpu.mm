@@ -149,14 +149,13 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 #ifdef SDL_VIDEO_DRIVER_EMSCRIPTEN
     {
         wgpu::SurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
-        fromCanvasHTMLSelector.chain.sType = wgpu::SType::SurfaceDescriptorFromCanvasHTMLSelector;
-
-        fromCanvasHTMLSelector.chain.next = NULL;
+        fromCanvasHTMLSelector.nextInChain = nullptr;
+        fromCanvasHTMLSelector.sType = wgpu::SType::SurfaceDescriptorFromCanvasHTMLSelector;
         fromCanvasHTMLSelector.selector   = "canvas";
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector.chain;
-        surfaceDescriptor.label       = NULL;
+        surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector;
+        surfaceDescriptor.label = "Emscripten SDL2 WebGPU Surface";
 
         return instance.CreateSurface(&surfaceDescriptor);
     }

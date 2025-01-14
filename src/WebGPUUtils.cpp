@@ -4,6 +4,10 @@
 #include <cassert>
 #include <vector>
 
+#ifdef __EMSCRIPTEN__
+    #include <webgpu/webgpu.h>
+#endif
+
 wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
                                               wgpu::RequestAdapterOptions const* options)
 {
@@ -15,15 +19,15 @@ wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
     UserData userData;
 
 #ifdef __EMSCRIPTEN__
-    auto onAdapterRequestEnded = [](wgpu::RequestAdapterStatus status,
-                                    wgpu::Adapter adapter,
+    auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status,
+                                    WGPUAdapter adapter,
                                     const char* message,
                                     void* pUserData)
     {
         UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == wgpu::RequestAdapterStatus::Success)
+        if (status == WGPURequestAdapterStatus_Success)
         {
-            userData.adapter = adapter;
+            userData.adapter = wgpu::Adapter::Acquire(adapter);
         }
         else
         {
@@ -31,6 +35,8 @@ wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
         }
         userData.requestEnded = true;
     };
+
+    instance.RequestAdapter(options, onAdapterRequestEnded, (void*)&userData);
 #else
     auto onAdapterRequestEnded = [](wgpu::RequestAdapterStatus status,
                                     wgpu::Adapter adapter,
@@ -47,12 +53,12 @@ wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
         }
         pUserData->requestEnded = true;
     };
-#endif
 
     instance.RequestAdapter(options,
                             wgpu::CallbackMode::AllowSpontaneous,
                             onAdapterRequestEnded,
                             &userData);
+#endif
 
 #ifdef __EMSCRIPTEN__
     while (!userData.requestEnded)
@@ -77,15 +83,13 @@ wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Adapter adapter,
     UserData userData;
 
 #ifdef __EMSCRIPTEN__
-    auto onDeviceRequestEnded = [](wgpu::RequestDeviceStatus status,
-                                   wgpu::Device device,
-                                   char const* message,
-                                   void* pUserData)
+    auto onDeviceRequestEnded =
+        [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* pUserData)
     {
         UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == wgpu::RequestDeviceStatus_Success)
+        if (status == WGPURequestDeviceStatus_Success)
         {
-            userData.device = device;
+            userData.device = wgpu::Device::Acquire(device);
         }
         else
         {
@@ -93,6 +97,8 @@ wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Adapter adapter,
         }
         userData.requestEnded = true;
     };
+
+    adapter.RequestDevice(descripter, onDeviceRequestEnded, (void*)&userData);
 #else
     auto onDeviceRequestEnded = [](wgpu::RequestDeviceStatus status,
                                    wgpu::Device device,
@@ -109,12 +115,12 @@ wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Adapter adapter,
         }
         userData->requestEnded = true;
     };
-#endif
 
     adapter.RequestDevice(descripter,
                           wgpu::CallbackMode::AllowSpontaneous,
                           onDeviceRequestEnded,
                           &userData);
+#endif
 
 #ifdef __EMSCRIPTEN__
     while (!userData.requestEnded)
@@ -135,13 +141,13 @@ void WebGPUUtils::InspectAdapter(wgpu::Adapter adapter)
 
     // Call the function a first time with a null return address, just to get
     // the entry count.
-    size_t featureCount = wgpuAdapterEnumerateFeatures(adapter, nullptr);
+    size_t featureCount = adapter.EnumerateFeatures(nullptr);
 
     // Allocate memory (could be a new, or a malloc() if this were a C program)
     features.resize(featureCount);
 
     // Call the function a second time, with a non-null return address
-    wgpuAdapterEnumerateFeatures(adapter, features.data());
+    adapter.EnumerateFeatures(features.data());
 
     SDL_Log("Adapter features:");
     for (auto feature : features)
@@ -151,7 +157,7 @@ void WebGPUUtils::InspectAdapter(wgpu::Adapter adapter)
 
     wgpu::AdapterProperties properties = {};
     properties.nextInChain             = nullptr;
-    wgpuAdapterGetProperties(adapter, &properties);
+    adapter.GetProperties(&properties);
     SDL_Log("Adapter properties:");
     SDL_Log(" - vendorID: %i", properties.vendorID);
     if (properties.vendorName)
@@ -229,9 +235,9 @@ void WebGPUUtils::InspectDevice(wgpu::Device device)
 {
 #ifdef __EMSCRIPTEN__
     std::vector<wgpu::FeatureName> features;
-    size_t featureCount = wgpuDeviceEnumerateFeatures(device, nullptr);
+    size_t featureCount = device.EnumerateFeatures(nullptr);
     features.resize(featureCount);
-    wgpuDeviceEnumerateFeatures(device, features.data());
+    device.EnumerateFeatures(features.data());
 
     SDL_Log("Device features:");
     for (auto feature : features)
@@ -242,7 +248,7 @@ void WebGPUUtils::InspectDevice(wgpu::Device device)
     wgpu::SupportedLimits supportedLimits = {};
     supportedLimits.nextInChain           = nullptr;
 
-    bool success = wgpuDeviceGetLimits(device, &supportedLimits);
+    bool success = device.GetLimits(&supportedLimits);
 
     if (success)
     {
@@ -281,7 +287,7 @@ void WebGPUUtils::InspectDevice(wgpu::Device device)
 wgpu::TextureFormat WebGPUUtils::GetTextureFormat(wgpu::Surface surface, wgpu::Adapter adapter)
 {
 #ifdef __EMSCRIPTEN__
-    wgpu::TextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+    wgpu::TextureFormat surfaceFormat = surface.GetPreferredFormat(adapter);
 #else
     wgpu::SurfaceCapabilities capabilities;
     wgpu::Status status = surface.GetCapabilities(adapter, &capabilities);

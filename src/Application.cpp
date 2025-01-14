@@ -84,15 +84,16 @@ bool Application::Initialize()
     deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
 
 #ifdef __EMSCRIPTEN__
-    deviceDesc.deviceLostCallback =
-        [](wgpu::DeviceLostReason reason, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
+    // // TODO
+    // deviceDesc.deviceLostCallback =
+    //     [](wgpu::DeviceLostReason reason, char const* message, void* /* pUserData */)
+    // {
+    //     SDL_Log("Device lost: reason 0x%08X", reason);
+    //     if (message)
+    //     {
+    //         SDL_Log(" - message: %s", message);
+    //     }
+    // };
 #else
     // // TODO
     // deviceDesc.deviceLostCallbackInfo2.nextInChain = nullptr;
@@ -127,15 +128,16 @@ bool Application::Initialize()
     device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
 
 #ifdef __EMSCRIPTEN__
-    auto onDeviceError = [](wgpu::ErrorType type, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-    wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
+    // // TODO
+    // auto onDeviceError = [](wgpu::ErrorType type, char const* message, void* /* pUserData */)
+    // {
+    //     SDL_Log("Uncaptured device error: type 0x%08X", type);
+    //     if (message)
+    //     {
+    //         SDL_Log(" - message: %s", message);
+    //     }
+    // };
+    // wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
 #endif
 
     WebGPUUtils::InspectDevice(device);
@@ -177,7 +179,7 @@ void Application::MainLoop()
     if (!isRunning)
     {
 #ifdef __EMSCRIPTEN__
-        emscripten::cancel::main::loop(); /* this should "kill" the app. */
+        emscripten_cancel_main_loop(); /* this should "kill" the app. */
         Terminate();
         return;
 #endif
@@ -283,6 +285,11 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxBufferSize              = 6 * 2 * sizeof(float);
     requiredLimits.limits.maxVertexBufferArrayStride = 2 * sizeof(float);
 
+    requiredLimits.limits.maxUniformBufferBindingSize =
+        supportedLimits.limits.maxUniformBufferBindingSize;
+    requiredLimits.limits.maxStorageBufferBindingSize =
+        supportedLimits.limits.maxStorageBufferBindingSize;
+
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
     requiredLimits.limits.minStorageBufferOffsetAlignment =
@@ -299,7 +306,7 @@ void Application::InitializePipeline()
     wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc {};
     shaderCodeDesc.nextInChain = nullptr;
 #ifdef __EMSCRIPTEN__
-    shaderCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
+    shaderCodeDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
 #else
     shaderCodeDesc.sType = wgpu::SType::ShaderSourceWGSL;
 #endif
