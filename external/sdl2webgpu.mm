@@ -38,20 +38,19 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
         [ns_window.contentView setLayer:metal_layer];
 
         wgpu::SurfaceSourceMetalLayer fromMetalLayer;
-        fromMetalLayer.chain.sType = wgpu::SType_SurfaceSourceMetalLayer;
-
-        fromMetalLayer.chain.next = NULL;
+        fromMetalLayer.nextInChain = nullptr;
+        fromMetalLayer.sType = wgpu::SType::SurfaceSourceMetalLayer;
         fromMetalLayer.layer      = metal_layer;
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
+        surfaceDescriptor.nextInChain = &fromMetalLayer;
 
         wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 #ifdef SDL_VIDEO_DRIVER_UIKIT
@@ -66,19 +65,19 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
         [ui_view.layer addSublayer:metal_layer];
 
         wgpu::SurfaceSourceMetalLayer fromMetalLayer;
-        fromMetalLayer.chain.sType = wgpu::SType_SurfaceSourceMetalLayer;
-        fromMetalLayer.chain.next  = NULL;
+        fromMetalLayer.nextInChain  = nullptr;
+        fromMetalLayer.sType = wgpu::SType::SurfaceSourceMetalLayer;
         fromMetalLayer.layer       = metal_layer;
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromMetalLayer.chain;
+        surfaceDescriptor.nextInChain = &fromMetalLayer;
 
         wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 #ifdef SDL_VIDEO_DRIVER_X11
@@ -87,20 +86,20 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
         Window x11_window    = windowWMInfo.info.x11.window;
 
         wgpu::SurfaceSourceXlibWindow fromXlibWindow;
-        fromXlibWindow.chain.sType = wgpu::SType_SurfaceSourceXlibWindow;
-        fromXlibWindow.chain.next  = NULL;
+        fromXlibWindow.nextInChain  = nullptr;
+        fromXlibWindow.sType = wgpu::SType::SurfaceSourceXlibWindow;
         fromXlibWindow.display     = x11_display;
         fromXlibWindow.window      = x11_window;
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromXlibWindow.chain;
+        surfaceDescriptor.nextInChain = &fromXlibWindow;
 
         wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 #ifdef SDL_VIDEO_DRIVER_WAYLAND
@@ -109,20 +108,20 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
         struct wl_surface* wayland_surface = windowWMInfo.info.wl.surface;
 
         wgpu::SurfaceSourceWaylandSurface fromWaylandSurface;
-        fromWaylandSurface.chain.sType = wgpu::SType_SurfaceSourceWaylandSurface;
-        fromWaylandSurface.chain.next  = NULL;
+        fromWaylandSurface.nextInChain  = nullptr;
+        fromWaylandSurface.sType = wgpu::SType::SurfaceSourceWaylandSurface;
         fromWaylandSurface.display     = wayland_display;
         fromWaylandSurface.surface     = wayland_surface;
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
+        surfaceDescriptor.nextInChain = &fromWaylandSurface;
 
         wgpu::StringView view;
         view.data               = "SDL2 WebGPU Surface";
         view.length             = 19;
         surfaceDescriptor.label = view;
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 #ifdef SDL_VIDEO_DRIVER_WINDOWS
@@ -159,7 +158,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
         surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector.chain;
         surfaceDescriptor.label       = NULL;
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 
