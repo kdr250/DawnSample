@@ -8,28 +8,168 @@
     #include <emscripten/html5_webgpu.h>
 #endif
 
-#include "ResourceManager.h"
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
-constexpr float PI = 3.14159265358979323846f;
+// We embbed the source of the shader module here
+const char* shaderSource = R"(
+
+@vertex
+fn vs_main(@location(0) in_vertex_position: vec2f) -> @builtin(position) vec4f {
+    return vec4f(in_vertex_position, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(0.0, 0.4, 1.0, 1.0);
+}
+
+)";
 
 bool Application::Initialize()
 {
-    return InitializeWindowAndDevice() && InitializeDepthBuffer() && InitializePipeline()
-           && InitializeTexture() && InitializeGeometry() && InitializeUniforms()
-           && InitializeBindGroups();
+    // Init SDL
+    SDL_Init(SDL_INIT_VIDEO);
+    window = SDL_CreateWindow("Dawn Sample",
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              1024,
+                              768,
+                              0);
+
+    // Create instance
+#ifdef __EMSCRIPTEN__
+    wgpu::Instance instance = wgpu::CreateInstance(nullptr);
+#else
+    wgpu::InstanceDescriptor desc = {};
+    desc.nextInChain              = nullptr;
+
+    wgpu::DawnTogglesDescriptor toggles;
+    toggles.nextInChain         = nullptr;
+    toggles.sType               = wgpu::SType::DawnTogglesDescriptor;
+    toggles.disabledToggleCount = 0;
+    toggles.enabledToggleCount  = 1;
+    const char* toggleName      = "enable::immediate::error::handling";
+    toggles.enabledToggles      = &toggleName;
+
+    desc.nextInChain = &toggles;
+
+    wgpu::Instance instance = wgpu::CreateInstance(&desc);
+#endif
+    if (instance == nullptr)
+    {
+        SDL_Log("Instance creation failed!");
+        return false;
+    }
+
+    // Create WebGPU surface
+    surface = SDL_GetWGPUSurface(instance, window);
+
+    // Requesting Adapter
+    wgpu::RequestAdapterOptions adapterOptions = {};
+    adapterOptions.nextInChain                 = nullptr;
+    adapterOptions.compatibleSurface           = surface;
+    wgpu::Adapter adapter = WebGPUUtils::RequestAdapterSync(instance, &adapterOptions);
+
+    WebGPUUtils::InspectAdapter(adapter);
+
+    // Requesting Device
+    wgpu::DeviceDescriptor deviceDesc   = {};
+    deviceDesc.nextInChain              = nullptr;
+    deviceDesc.label                    = WebGPUUtils::GenerateString("My Device");
+    deviceDesc.requiredFeatureCount     = 0;
+    wgpu::RequiredLimits requiredLimits = GetRequiredLimits(adapter);
+    deviceDesc.requiredLimits           = &requiredLimits;
+    deviceDesc.defaultQueue.nextInChain = nullptr;
+    deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
+
+#ifdef __EMSCRIPTEN__
+    deviceDesc.deviceLostCallback =
+        [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
+    {
+        SDL_Log("Device lost: reason 0x%08X", reason);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+#else
+    auto deviceLostCallback = [](const wgpu::Device& device,
+                                 wgpu::DeviceLostReason reason,
+                                 const char* message,
+                                 void* /* userData */)
+    {
+        SDL_Log("Device lost: reason 0x%08X", reason);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
+                                     deviceLostCallback,
+                                     (void*)nullptr);
+
+    auto uncapturedErrorCallback = [](const wgpu::Device& device,
+                                      wgpu::ErrorType type,
+                                      const char* message,
+                                      void* /* pUserData */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+
+    deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback, (void*)nullptr);
+#endif
+
+    device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
+
+#ifdef __EMSCRIPTEN__
+    auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+    device.SetUncapturedErrorCallback(onDeviceError, (void*)nullptr);
+#endif
+
+    WebGPUUtils::InspectDevice(device);
+
+    queue = device.GetQueue();
+
+    surfaceFormat = WebGPUUtils::GetTextureFormat(surface, adapter);
+
+    // Configure the surface
+    wgpu::SurfaceConfiguration config = {};
+    config.nextInChain                = nullptr;
+    config.width                      = 1024;
+    config.height                     = 768;
+    config.usage                      = wgpu::TextureUsage::RenderAttachment;
+    config.format                     = surfaceFormat;
+    config.viewFormatCount            = 0;
+    config.viewFormats                = nullptr;
+    config.device                     = device;
+    config.presentMode                = wgpu::PresentMode::Fifo;
+    config.alphaMode                  = wgpu::CompositeAlphaMode::Auto;
+
+    surface.Configure(&config);
+
+    InitializePipeline();
+    InitializeBuffers();
+
+    return true;
 }
 
 void Application::Terminate()
 {
-    TerminateBindGroups();
-    TerminateUniforms();
-    TerminateGeometry();
-    TerminateTexture();
-    TerminatePipeline();
-    TerminateDepthBuffer();
-    TerminateWindowAndDevice();
+    // Terminate SDL
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 }
 
 void Application::MainLoop()
@@ -53,19 +193,6 @@ void Application::MainLoop()
                 isRunning = false;
                 break;
 
-            case SDL_MOUSEMOTION:
-                OnMouseMove();
-                break;
-
-            case SDL_MOUSEWHEEL:
-                OnScroll(event);
-                break;
-
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
-                OnMouseButton(event);
-                break;
-
             default:
                 break;
         }
@@ -82,95 +209,64 @@ void Application::MainLoop()
     while (!SDL_TICKS_PASSED(SDL_GetTicks64(), tickCount + 16))
         ;
 #endif
-
     float delta = (SDL_GetTicks64() - tickCount) / 1000.0f;
     deltaTime   = std::min(delta, 0.05f);
     tickCount   = SDL_GetTicks64();
 
-    // Update uniform buffer
-    uniforms.time = tickCount / 1000.0f;
-    wgpuQueueWriteBuffer(queue,
-                         uniformBuffer,
-                         offsetof(MyUniforms, time),
-                         &uniforms.time,
-                         sizeof(MyUniforms::time));
-
     // Get the next target texture view
-    WGPUTextureView targetView = GetNextSurfaceTextureView();
+    wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
     {
         return;
     }
 
     // Create a command encoder for the draw call
-    WGPUCommandEncoderDescriptor encoderDesc = {};
-    encoderDesc.nextInChain                  = nullptr;
-    encoderDesc.label                        = WebGPUUtils::GenerateString("My command encoder");
-    WGPUCommandEncoder encoder               = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+    wgpu::CommandEncoderDescriptor encoderDesc = {};
+    encoderDesc.nextInChain                    = nullptr;
+    encoderDesc.label                          = WebGPUUtils::GenerateString("My command encoder");
+    wgpu::CommandEncoder encoder               = device.CreateCommandEncoder(&encoderDesc);
 
     // Create the render pass that clears the screen with our color
-    WGPURenderPassDescriptor renderPassDesc = {};
-    renderPassDesc.nextInChain              = nullptr;
+    wgpu::RenderPassDescriptor renderPassDesc = {};
+    renderPassDesc.nextInChain                = nullptr;
+    renderPassDesc.label                      = WebGPUUtils::GenerateString("Render Pass");
 
     // The attachment part of the render pass descriptor describes the target texture of the pass
-    WGPURenderPassColorAttachment renderPassColorAttachment = {};
-    renderPassColorAttachment.view                          = targetView;
-    renderPassColorAttachment.resolveTarget                 = nullptr;
-    renderPassColorAttachment.loadOp                        = WGPULoadOp_Clear;
-    renderPassColorAttachment.storeOp                       = WGPUStoreOp_Store;
-    renderPassColorAttachment.clearValue                    = WGPUColor {0.05, 0.05, 0.05, 1.0};
-    renderPassColorAttachment.depthSlice                    = WGPU_DEPTH_SLICE_UNDEFINED;
+    wgpu::RenderPassColorAttachment renderPassColorAttachment = {};
+    renderPassColorAttachment.nextInChain                     = nullptr;
+    renderPassColorAttachment.view                            = targetView;
+    renderPassColorAttachment.resolveTarget                   = nullptr;
+    renderPassColorAttachment.loadOp                          = wgpu::LoadOp::Clear;
+    renderPassColorAttachment.storeOp                         = wgpu::StoreOp::Store;
+    renderPassColorAttachment.clearValue                      = wgpu::Color {0.9, 0.1, 0.2, 1.0};
+    renderPassColorAttachment.depthSlice                      = WGPU_DEPTH_SLICE_UNDEFINED;
 
-    renderPassDesc.colorAttachmentCount = 1;
-    renderPassDesc.colorAttachments     = &renderPassColorAttachment;
-
-    WGPURenderPassDepthStencilAttachment depthStencilAttachment;
-    depthStencilAttachment.view              = depthTextureView;
-    depthStencilAttachment.depthClearValue   = 1.0f;
-    depthStencilAttachment.depthLoadOp       = WGPULoadOp_Clear;
-    depthStencilAttachment.depthStoreOp      = WGPUStoreOp_Store;
-    depthStencilAttachment.depthReadOnly     = false;
-    depthStencilAttachment.stencilClearValue = 0;
-    depthStencilAttachment.stencilLoadOp     = WGPULoadOp_Undefined;
-    depthStencilAttachment.stencilStoreOp    = WGPUStoreOp_Undefined;
-    depthStencilAttachment.stencilReadOnly   = true;
-
-    renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
+    renderPassDesc.colorAttachmentCount   = 1;
+    renderPassDesc.colorAttachments       = &renderPassColorAttachment;
+    renderPassDesc.depthStencilAttachment = nullptr;
     renderPassDesc.timestampWrites        = nullptr;
 
     // Create the render pass and end it immediately (we only clear the screen but do not draw anything)
-    WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+    wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
     // set pipeline to renderpass and draw
-    wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
-    wgpuRenderPassEncoderSetVertexBuffer(renderPass,
-                                         0,
-                                         vertexBuffer,
-                                         0,
-                                         wgpuBufferGetSize(vertexBuffer));
-    wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
-    wgpuRenderPassEncoderDraw(renderPass, indexCount, 1, 0, 0);
-
-    wgpuRenderPassEncoderEnd(renderPass);
-    wgpuRenderPassEncoderRelease(renderPass);
+    renderPass.SetPipeline(pipeline);
+    renderPass.SetVertexBuffer(0, vertexBuffer, 0, vertexBuffer.GetSize());
+    renderPass.Draw(vertexCount, 1, 0, 0);
+    renderPass.End();
 
     // Finally encode and submit the render pass
-    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-    cmdBufferDescriptor.nextInChain                 = nullptr;
-    cmdBufferDescriptor.label                       = WebGPUUtils::GenerateString("Command buffer");
+    wgpu::CommandBufferDescriptor cmdBufferDescriptor;
+    cmdBufferDescriptor.nextInChain = nullptr;
+    cmdBufferDescriptor.label       = WebGPUUtils::GenerateString("Command buffer");
 
-    WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
-    wgpuCommandEncoderRelease(encoder);
+    wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
 
-    wgpuQueueSubmit(queue, 1, &command);
-    wgpuCommandBufferRelease(command);
-
-    // At the end of the frame
-    wgpuTextureViewRelease(targetView);
+    queue.Submit(1, &command);
 
 #ifndef __EMSCRIPTEN__
-    wgpuSurfacePresent(surface);
-    wgpuDeviceTick(device);
+    surface.Present();
+    device.Tick();
 #endif
 }
 
@@ -179,228 +275,25 @@ bool Application::IsRunning()
     return isRunning;
 }
 
-bool Application::InitializeWindowAndDevice()
-{
-    // Init SDL
-    SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("Dawn Sample",
-                              SDL_WINDOWPOS_UNDEFINED,
-                              SDL_WINDOWPOS_UNDEFINED,
-                              1024,
-                              768,
-                              0);
-
-    // Create instance
-#ifdef __EMSCRIPTEN__
-    WGPUInstance instance = wgpuCreateInstance(nullptr);
-#else
-    WGPUInstanceDescriptor desc = {};
-    desc.nextInChain            = nullptr;
-
-    WGPUDawnTogglesDescriptor toggles;
-    toggles.chain.next          = nullptr;
-    toggles.chain.sType         = WGPUSType_DawnTogglesDescriptor;
-    toggles.disabledToggleCount = 0;
-    toggles.enabledToggleCount  = 1;
-    const char* toggleName      = "enable_immediate_error_handling";
-    toggles.enabledToggles      = &toggleName;
-
-    desc.nextInChain = &toggles.chain;
-
-    WGPUInstance instance = wgpuCreateInstance(&desc);
-#endif
-    if (instance == nullptr)
-    {
-        SDL_Log("Instance creation failed!");
-        return false;
-    }
-
-    // Create WebGPU surface
-    surface = SDL_GetWGPUSurface(instance, window);
-
-    // Requesting Adapter
-    WGPURequestAdapterOptions adapterOptions = {};
-    adapterOptions.nextInChain               = nullptr;
-    adapterOptions.compatibleSurface         = surface;
-    WGPUAdapter adapter = WebGPUUtils::RequestAdapterSync(instance, &adapterOptions);
-
-    WebGPUUtils::InspectAdapter(adapter);
-
-    wgpuInstanceRelease(instance);
-
-    // Requesting Device
-    WGPUDeviceDescriptor deviceDesc     = {};
-    deviceDesc.nextInChain              = nullptr;
-    deviceDesc.label                    = WebGPUUtils::GenerateString("My Device");
-    deviceDesc.requiredFeatureCount     = 0;
-    WGPURequiredLimits requiredLimits   = GetRequiredLimits(adapter);
-    deviceDesc.requiredLimits           = &requiredLimits;
-    deviceDesc.defaultQueue.nextInChain = nullptr;
-    deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
-
-#ifdef __EMSCRIPTEN__
-    deviceDesc.deviceLostCallback =
-        [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-#else
-    deviceDesc.deviceLostCallbackInfo2.nextInChain = nullptr;
-    deviceDesc.deviceLostCallbackInfo2.mode        = WGPUCallbackMode_WaitAnyOnly;
-    deviceDesc.deviceLostCallbackInfo2.callback    = [](const WGPUDevice* device,
-                                                     WGPUDeviceLostReason reason,
-                                                     WGPUStringView message,
-                                                     void* /* pUserData1 */,
-                                                     void* /* pUserData2 */)
-    {
-        SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message.data)
-        {
-            SDL_Log(" - message: %s", message.data);
-        }
-    };
-    deviceDesc.uncapturedErrorCallbackInfo2.nextInChain = nullptr;
-    deviceDesc.uncapturedErrorCallbackInfo2.callback    = [](const WGPUDevice* device,
-                                                          WGPUErrorType type,
-                                                          WGPUStringView message,
-                                                          void* /* pUserData1 */,
-                                                          void* /* pUserData2 */)
-    {
-        SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message.data)
-        {
-            SDL_Log(" - message: %s", message.data);
-        }
-    };
-#endif
-
-    device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
-
-#ifdef __EMSCRIPTEN__
-    auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-    wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
-#endif
-
-    WebGPUUtils::InspectDevice(device);
-
-    queue = wgpuDeviceGetQueue(device);
-
-    surfaceFormat = WebGPUUtils::GetTextureFormat(surface, adapter);
-
-    // Configure the surface
-    WGPUSurfaceConfiguration config = {};
-    config.nextInChain              = nullptr;
-    config.width                    = 1024;
-    config.height                   = 768;
-    config.usage                    = WGPUTextureUsage_RenderAttachment;
-    config.format                   = surfaceFormat;
-    config.viewFormatCount          = 0;
-    config.viewFormats              = nullptr;
-    config.device                   = device;
-    config.presentMode              = WGPUPresentMode_Fifo;
-    config.alphaMode                = WGPUCompositeAlphaMode_Auto;
-
-    wgpuSurfaceConfigure(surface, &config);
-
-    wgpuAdapterRelease(adapter);
-
-    return true;
-}
-
-void Application::TerminateWindowAndDevice()
-{
-    // Terminate WebGPU
-    wgpuSurfaceUnconfigure(surface);
-    wgpuSurfaceRelease(surface);
-    wgpuQueueRelease(queue);
-    wgpuDeviceRelease(device);
-
-    // Terminate SDL
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-}
-
-bool Application::InitializeDepthBuffer()
-{
-    // Create the depth texture
-    WGPUTextureDescriptor depthTextureDesc;
-    depthTextureDesc.nextInChain     = nullptr;
-    depthTextureDesc.label           = WebGPUUtils::GenerateString("Depth Texture");
-    depthTextureDesc.dimension       = WGPUTextureDimension_2D;
-    depthTextureDesc.format          = depthTextureFormat;
-    depthTextureDesc.mipLevelCount   = 1;
-    depthTextureDesc.sampleCount     = 1;
-    depthTextureDesc.size            = {1024, 768, 1};
-    depthTextureDesc.usage           = WGPUTextureUsage_RenderAttachment;
-    depthTextureDesc.viewFormatCount = 1;
-    depthTextureDesc.viewFormats     = (WGPUTextureFormat*)&depthTextureFormat;
-    depthTexture                     = wgpuDeviceCreateTexture(device, &depthTextureDesc);
-
-    // Create the view of the depth texture manipulated by the rasterizer
-    WGPUTextureViewDescriptor depthTextureViewDesc;
-    depthTextureViewDesc.nextInChain = nullptr;
-    depthTextureViewDesc.label       = WebGPUUtils::GenerateString("Depth Texture View");
-    depthTextureViewDesc.aspect      = WGPUTextureAspect_DepthOnly;
-#ifndef __EMSCRIPTEN__
-    depthTextureViewDesc.usage = WGPUTextureUsage_None;
-#endif
-    depthTextureViewDesc.baseArrayLayer  = 0;
-    depthTextureViewDesc.arrayLayerCount = 1;
-    depthTextureViewDesc.baseMipLevel    = 0;
-    depthTextureViewDesc.mipLevelCount   = 1;
-    depthTextureViewDesc.dimension       = WGPUTextureViewDimension_2D;
-    depthTextureViewDesc.format          = depthTextureFormat;
-    depthTextureView = wgpuTextureCreateView(depthTexture, &depthTextureViewDesc);
-
-    return true;
-}
-
-void Application::TerminateDepthBuffer()
-{
-    wgpuTextureViewRelease(depthTextureView);
-    wgpuTextureDestroy(depthTexture);
-    wgpuTextureRelease(depthTexture);
-}
-
-WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
+wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 {
     // Get adapter supported limits, in case we need them
-    WGPUSupportedLimits supportedLimits;
+    wgpu::SupportedLimits supportedLimits;
     supportedLimits.nextInChain = nullptr;
-    wgpuAdapterGetLimits(adapter, &supportedLimits);
+    adapter.GetLimits(&supportedLimits);
 
-    WGPURequiredLimits requiredLimits {};
+    wgpu::RequiredLimits requiredLimits {};
     SetDefaultLimits(requiredLimits.limits);
 
-    // vertex and shader
-    requiredLimits.limits.maxVertexAttributes           = 4;
-    requiredLimits.limits.maxVertexBuffers              = 1;
-    requiredLimits.limits.maxBufferSize                 = 150000 * sizeof(VertexAttributes);
-    requiredLimits.limits.maxVertexBufferArrayStride    = sizeof(VertexAttributes);
-    requiredLimits.limits.maxInterStageShaderComponents = 8;
+    requiredLimits.limits.maxVertexAttributes        = 1;
+    requiredLimits.limits.maxVertexBuffers           = 1;
+    requiredLimits.limits.maxBufferSize              = 6 * 2 * sizeof(float);
+    requiredLimits.limits.maxVertexBufferArrayStride = 2 * sizeof(float);
 
-    // uniform
-    requiredLimits.limits.maxBindGroups                   = 1;
-    requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
-
-    // for the depth buffer
-    requiredLimits.limits.maxTextureDimension1D = 2048;
-    requiredLimits.limits.maxTextureDimension2D = 2048;
-    requiredLimits.limits.maxTextureArrayLayers = 1;
-
-    requiredLimits.limits.maxSamplersPerShaderStage = 1;
+    requiredLimits.limits.maxUniformBufferBindingSize =
+        supportedLimits.limits.maxUniformBufferBindingSize;
+    requiredLimits.limits.maxStorageBufferBindingSize =
+        supportedLimits.limits.maxStorageBufferBindingSize;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -410,104 +303,38 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const
     return requiredLimits;
 }
 
-void Application::SetDefaultBindGroupLayout(WGPUBindGroupLayoutEntry& bindingLayout)
-{
-#ifdef __EMSCRIPTEN__
-    bindingLayout.buffer.nextInChain      = nullptr;
-    bindingLayout.buffer.type             = WGPUBufferBindingType_Undefined;
-    bindingLayout.buffer.hasDynamicOffset = false;
-
-    bindingLayout.sampler.nextInChain = nullptr;
-    bindingLayout.sampler.type        = WGPUSamplerBindingType_Undefined;
-
-    bindingLayout.storageTexture.nextInChain   = nullptr;
-    bindingLayout.storageTexture.access        = WGPUStorageTextureAccess_Undefined;
-    bindingLayout.storageTexture.format        = WGPUTextureFormat_Undefined;
-    bindingLayout.storageTexture.viewDimension = WGPUTextureViewDimension_Undefined;
-
-    bindingLayout.texture.nextInChain   = nullptr;
-    bindingLayout.texture.multisampled  = false;
-    bindingLayout.texture.sampleType    = WGPUTextureSampleType_Undefined;
-    bindingLayout.texture.viewDimension = WGPUTextureViewDimension_Undefined;
-#else
-    bindingLayout.buffer.nextInChain      = nullptr;
-    bindingLayout.buffer.type             = WGPUBufferBindingType_BindingNotUsed;
-    bindingLayout.buffer.hasDynamicOffset = false;
-
-    bindingLayout.sampler.nextInChain = nullptr;
-    bindingLayout.sampler.type        = WGPUSamplerBindingType_BindingNotUsed;
-
-    bindingLayout.storageTexture.nextInChain   = nullptr;
-    bindingLayout.storageTexture.access        = WGPUStorageTextureAccess_BindingNotUsed;
-    bindingLayout.storageTexture.format        = WGPUTextureFormat_Undefined;
-    bindingLayout.storageTexture.viewDimension = WGPUTextureViewDimension_Undefined;
-
-    bindingLayout.texture.nextInChain   = nullptr;
-    bindingLayout.texture.multisampled  = false;
-    bindingLayout.texture.sampleType    = WGPUTextureSampleType_BindingNotUsed;
-    bindingLayout.texture.viewDimension = WGPUTextureViewDimension_Undefined;
-#endif
-}
-
-void Application::SetDefaultStencilFaceState(WGPUStencilFaceState& stencilFaceState)
-{
-    stencilFaceState.compare     = WGPUCompareFunction_Always;
-    stencilFaceState.failOp      = WGPUStencilOperation_Keep;
-    stencilFaceState.depthFailOp = WGPUStencilOperation_Keep;
-    stencilFaceState.passOp      = WGPUStencilOperation_Keep;
-}
-
-void Application::SetDefaultDepthStencilState(WGPUDepthStencilState& depthStencilState)
-{
-    depthStencilState.nextInChain         = nullptr;
-    depthStencilState.format              = WGPUTextureFormat_Undefined;
-    depthStencilState.depthWriteEnabled   = WebGPUUtils::GenerateBool(false);
-    depthStencilState.depthCompare        = WGPUCompareFunction_Always;
-    depthStencilState.stencilReadMask     = 0xFFFFFFFF;
-    depthStencilState.stencilWriteMask    = 0xFFFFFFFF;
-    depthStencilState.depthBias           = 0;
-    depthStencilState.depthBiasSlopeScale = 0;
-    depthStencilState.depthBiasClamp      = 0;
-    SetDefaultStencilFaceState(depthStencilState.stencilFront);
-    SetDefaultStencilFaceState(depthStencilState.stencilBack);
-}
-
-bool Application::InitializePipeline()
+void Application::InitializePipeline()
 {
     // Load the shader module
-    WGPUShaderModule shaderModule =
-        ResourceManager::LoadShaderModule("resources/shader.wgsl", device);
+    wgpu::ShaderModuleDescriptor shaderDesc {};
 
-    if (shaderModule == nullptr)
-    {
-        SDL_Log("Could not load shader!");
-        exit(EXIT_FAILURE);
-    }
+    wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc {};
+    shaderCodeDesc.nextInChain = nullptr;
+#ifdef __EMSCRIPTEN__
+    shaderCodeDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
+#else
+    shaderCodeDesc.sType = wgpu::SType::ShaderSourceWGSL;
+#endif
+    // conect the chain
+    shaderDesc.nextInChain          = &shaderCodeDesc;
+    shaderCodeDesc.code             = WebGPUUtils::GenerateString(shaderSource);
+    wgpu::ShaderModule shaderModule = device.CreateShaderModule(&shaderDesc);
 
     // Create the render pipeline
-    WGPURenderPipelineDescriptor pipelineDesc = {};
-    pipelineDesc.nextInChain                  = nullptr;
+    wgpu::RenderPipelineDescriptor pipelineDesc = {};
+    pipelineDesc.nextInChain                    = nullptr;
 
     // Describe vertex pipeline
-    WGPUVertexBufferLayout vertexBufferLayout {};
-    std::vector<WGPUVertexAttribute> vertexAttribs(4);
-    vertexAttribs[0].shaderLocation = 0;  // Describe the position attribute
-    vertexAttribs[0].format         = WGPUVertexFormat_Float32x3;
-    vertexAttribs[0].offset         = offsetof(VertexAttributes, position);
-    vertexAttribs[1].shaderLocation = 1;  // Describe the normal attribute
-    vertexAttribs[1].format         = WGPUVertexFormat_Float32x3;
-    vertexAttribs[1].offset         = offsetof(VertexAttributes, normal);
-    vertexAttribs[2].shaderLocation = 2;  // Describe the color attribute
-    vertexAttribs[2].format         = WGPUVertexFormat_Float32x3;
-    vertexAttribs[2].offset         = offsetof(VertexAttributes, color);
-    vertexAttribs[3].shaderLocation = 3;  // Describe the uv attribute
-    vertexAttribs[3].format         = WGPUVertexFormat_Float32x2;
-    vertexAttribs[3].offset         = offsetof(VertexAttributes, uv);
+    wgpu::VertexBufferLayout vertexBufferLayout {};
+    wgpu::VertexAttribute positionAttrib;
+    positionAttrib.shaderLocation = 0;
+    positionAttrib.format         = wgpu::VertexFormat::Float32x2;
+    positionAttrib.offset         = 0;
 
-    vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
-    vertexBufferLayout.attributes     = vertexAttribs.data();
-    vertexBufferLayout.arrayStride    = sizeof(VertexAttributes);
-    vertexBufferLayout.stepMode       = WGPUVertexStepMode_Vertex;
+    vertexBufferLayout.attributeCount = 1;
+    vertexBufferLayout.attributes     = &positionAttrib;
+    vertexBufferLayout.arrayStride    = 2 * sizeof(float);
+    vertexBufferLayout.stepMode       = wgpu::VertexStepMode::Vertex;
 
     pipelineDesc.vertex.bufferCount = 1;
     pipelineDesc.vertex.buffers     = &vertexBufferLayout;
@@ -518,45 +345,38 @@ bool Application::InitializePipeline()
     pipelineDesc.vertex.constants     = nullptr;
 
     // Describe primitive pipeline
-    pipelineDesc.primitive.topology         = WGPUPrimitiveTopology_TriangleList;
-    pipelineDesc.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
-    pipelineDesc.primitive.frontFace        = WGPUFrontFace_CCW;
-    pipelineDesc.primitive.cullMode         = WGPUCullMode_None;
+    pipelineDesc.primitive.topology         = wgpu::PrimitiveTopology::TriangleList;
+    pipelineDesc.primitive.stripIndexFormat = wgpu::IndexFormat::Undefined;
+    pipelineDesc.primitive.frontFace        = wgpu::FrontFace::CCW;
+    pipelineDesc.primitive.cullMode         = wgpu::CullMode::None;
 
     // Describe fragment pipeline
-    WGPUFragmentState fragmentState {};
+    wgpu::FragmentState fragmentState {};
     fragmentState.module        = shaderModule;
     fragmentState.entryPoint    = WebGPUUtils::GenerateString("fs_main");
     fragmentState.constantCount = 0;
     fragmentState.constants     = nullptr;
 
     // blend settings
-    WGPUBlendState blendState {};
-    blendState.color.srcFactor = WGPUBlendFactor_SrcAlpha;
-    blendState.color.dstFactor = WGPUBlendFactor_OneMinusSrcAlpha;
-    blendState.color.operation = WGPUBlendOperation_Add;
-    blendState.alpha.srcFactor = WGPUBlendFactor_Zero;
-    blendState.alpha.dstFactor = WGPUBlendFactor_One;
-    blendState.alpha.operation = WGPUBlendOperation_Add;
+    wgpu::BlendState blendState {};
+    blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
+    blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
+    blendState.color.operation = wgpu::BlendOperation::Add;
+    blendState.alpha.srcFactor = wgpu::BlendFactor::Zero;
+    blendState.alpha.dstFactor = wgpu::BlendFactor::One;
+    blendState.alpha.operation = wgpu::BlendOperation::Add;
 
-    WGPUColorTargetState colorTarget {};
+    wgpu::ColorTargetState colorTarget {};
     colorTarget.format    = surfaceFormat;
     colorTarget.blend     = &blendState;
-    colorTarget.writeMask = WGPUColorWriteMask_All;
+    colorTarget.writeMask = wgpu::ColorWriteMask::All;
 
     fragmentState.targetCount = 1;
     fragmentState.targets     = &colorTarget;
     pipelineDesc.fragment     = &fragmentState;
 
     // Describe stencil/depth pipeline
-    WGPUDepthStencilState depthStencilState;
-    SetDefaultDepthStencilState(depthStencilState);
-    depthStencilState.depthCompare      = WGPUCompareFunction_Less;
-    depthStencilState.depthWriteEnabled = WebGPUUtils::GenerateBool(true);
-    depthStencilState.format            = depthTextureFormat;
-    depthStencilState.stencilReadMask   = 0;
-    depthStencilState.stencilWriteMask  = 0;
-    pipelineDesc.depthStencil           = &depthStencilState;
+    pipelineDesc.depthStencil = nullptr;
 
     // Describe multi-sampling pipeline
     pipelineDesc.multisample.count                  = 1;
@@ -564,301 +384,72 @@ bool Application::InitializePipeline()
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
     // Describe pipeline layout
-    // Create binding layouts
-    std::vector<WGPUBindGroupLayoutEntry> bindingLayoutEntries(3);
+    pipelineDesc.layout = nullptr;
 
-    // for uniform buffer
-    WGPUBindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
-    SetDefaultBindGroupLayout(bindingLayout);
-    bindingLayout.binding = 0;  // The binding index as used in the @binding attribute in the shader
-    bindingLayout.visibility            = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
-    bindingLayout.buffer.type           = WGPUBufferBindingType_Uniform;
-    bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
-
-    // for texture binding
-    WGPUBindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
-    SetDefaultBindGroupLayout(textureBindingLayout);
-    textureBindingLayout.binding               = 1;
-    textureBindingLayout.visibility            = WGPUShaderStage_Fragment;
-    textureBindingLayout.texture.sampleType    = WGPUTextureSampleType_Float;
-    textureBindingLayout.texture.viewDimension = WGPUTextureViewDimension_2D;
-
-    // for texture sampler binding
-    WGPUBindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
-    SetDefaultBindGroupLayout(samplerBindingLayout);
-    samplerBindingLayout.binding      = 2;
-    samplerBindingLayout.visibility   = WGPUShaderStage_Fragment;
-    samplerBindingLayout.sampler.type = WGPUSamplerBindingType_Filtering;
-
-    // Create a bind group layout
-    WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc {};
-    bindGroupLayoutDesc.nextInChain = nullptr;
-    bindGroupLayoutDesc.entryCount  = static_cast<uint32_t>(bindingLayoutEntries.size());
-    bindGroupLayoutDesc.entries     = bindingLayoutEntries.data();
-    bindGroupLayout                 = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDesc);
-
-    // Create pipeline layout
-    WGPUPipelineLayoutDescriptor layoutDesc {};
-    layoutDesc.nextInChain          = nullptr;
-    layoutDesc.bindGroupLayoutCount = 1;
-    layoutDesc.bindGroupLayouts     = &bindGroupLayout;
-    layout                          = wgpuDeviceCreatePipelineLayout(device, &layoutDesc);
-    pipelineDesc.layout             = layout;
-
-    pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
-
-    wgpuShaderModuleRelease(shaderModule);
-
-    return true;
+    pipeline = device.CreateRenderPipeline(&pipelineDesc);
 }
 
-void Application::TerminatePipeline()
+void Application::InitializeBuffers()
 {
-    wgpuBindGroupLayoutRelease(bindGroupLayout);
-    wgpuRenderPipelineRelease(pipeline);
-    wgpuPipelineLayoutRelease(layout);
-}
-
-bool Application::InitializeTexture()
-{
-    // Create a sampler
-    WGPUSamplerDescriptor samplerDesc;
-    samplerDesc.nextInChain   = nullptr;
-    samplerDesc.label         = WebGPUUtils::GenerateString("Sampler");
-    samplerDesc.addressModeU  = WGPUAddressMode_Repeat;
-    samplerDesc.addressModeV  = WGPUAddressMode_Repeat;
-    samplerDesc.addressModeW  = WGPUAddressMode_Repeat;
-    samplerDesc.magFilter     = WGPUFilterMode_Linear;
-    samplerDesc.minFilter     = WGPUFilterMode_Linear;
-    samplerDesc.mipmapFilter  = WGPUMipmapFilterMode_Linear;
-    samplerDesc.lodMinClamp   = 0.0f;
-    samplerDesc.lodMaxClamp   = 8.0f;
-    samplerDesc.compare       = WGPUCompareFunction_Undefined;
-    samplerDesc.maxAnisotropy = 1;
-    sampler                   = wgpuDeviceCreateSampler(device, &samplerDesc);
-
-    // Create texture
-    texture =
-        ResourceManager::LoadTexture("resources/fourareen2K_albedo.jpg", device, &textureView);
-
-    if (!texture)
-    {
-        SDL_Log("Could not load texture!");
-        return false;
-    }
-
-    return true;
-}
-
-void Application::TerminateTexture()
-{
-    wgpuTextureViewRelease(textureView);
-    wgpuTextureDestroy(texture);
-    wgpuTextureRelease(texture);
-    wgpuSamplerRelease(sampler);
-}
-
-bool Application::InitializeGeometry()
-{
-    // Load mesh data from OBJ file
-    std::vector<VertexAttributes> vertexData;
-    bool success = ResourceManager::LoadGeometryFromObj("resources/fourareen.obj", vertexData);
-    if (!success)
-    {
-        SDL_Log("Could not load geometry!");
-        return false;
-    }
-
-    indexCount = static_cast<uint32_t>(vertexData.size());
+    // Vertex buffer data
+    std::vector<float> vertexData = {// first triangle
+                                     -0.5f,
+                                     -0.5f,
+                                     0.5f,
+                                     -0.5f,
+                                     0.0f,
+                                     0.5f,
+                                     // second triangle
+                                     -0.55f,
+                                     -0.5f,
+                                     -0.05f,
+                                     0.5f,
+                                     -0.55f,
+                                     0.5f};
+    vertexCount                   = static_cast<uint32_t>(vertexData.size() / 2);
 
     // Create vertex buffer
-    WGPUBufferDescriptor bufferDesc {};
+    wgpu::BufferDescriptor bufferDesc {};
     bufferDesc.nextInChain      = nullptr;
-    bufferDesc.size             = vertexData.size() * sizeof(VertexAttributes);
-    bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex;
+    bufferDesc.size             = vertexData.size() * sizeof(float);
+    bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
     bufferDesc.mappedAtCreation = false;
-    vertexBuffer                = wgpuDeviceCreateBuffer(device, &bufferDesc);
+    vertexBuffer                = device.CreateBuffer(&bufferDesc);
 
-    wgpuQueueWriteBuffer(queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
-
-    return true;
+    queue.WriteBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 }
 
-void Application::TerminateGeometry()
-{
-    wgpuBufferRelease(vertexBuffer);
-}
-
-bool Application::InitializeUniforms()
-{
-    // Create uniform buffer
-    WGPUBufferDescriptor bufferDesc {};
-    bufferDesc.nextInChain      = nullptr;
-    bufferDesc.size             = sizeof(MyUniforms);
-    bufferDesc.usage            = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
-    bufferDesc.mappedAtCreation = false;
-    uniformBuffer               = wgpuDeviceCreateBuffer(device, &bufferDesc);
-
-    // Upload the initial value of the uniforms
-    uniforms.modelMatrix = glm::mat4x4(1.0);
-    uniforms.viewMatrix =
-        glm::lookAt(glm::vec3(-2.0f, -3.0f, 2.0f), glm::vec3(0.0f), glm::vec3(0, 0, 1));
-    uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
-    uniforms.time             = 1.0f;
-    uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
-
-    wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
-
-    return true;
-}
-
-void Application::TerminateUniforms()
-{
-    wgpuBufferRelease(uniformBuffer);
-}
-
-bool Application::InitializeBindGroups()
-{
-    // Create a binding
-    std::vector<WGPUBindGroupEntry> bindings(3);
-
-    bindings[0].nextInChain = nullptr;
-    bindings[0].binding     = 0;
-    bindings[0].buffer      = uniformBuffer;
-    bindings[0].offset      = 0;
-    bindings[0].size        = sizeof(MyUniforms);
-
-    bindings[1].nextInChain = nullptr;
-    bindings[1].binding     = 1;
-    bindings[1].textureView = textureView;
-
-    bindings[2].nextInChain = nullptr;
-    bindings[2].binding     = 2;
-    bindings[2].sampler     = sampler;
-
-    // A bind group contains one or multiple bindings
-    WGPUBindGroupDescriptor bindGroupDesc;
-    bindGroupDesc.nextInChain = nullptr;
-    bindGroupDesc.label       = WebGPUUtils::GenerateString("Bind Group");
-    bindGroupDesc.layout      = bindGroupLayout;
-    bindGroupDesc.entryCount  = static_cast<uint32_t>(bindings.size());
-    bindGroupDesc.entries     = bindings.data();
-    bindGroup                 = wgpuDeviceCreateBindGroup(device, &bindGroupDesc);
-
-    return true;
-}
-
-void Application::TerminateBindGroups()
-{
-    wgpuBindGroupRelease(bindGroup);
-}
-
-WGPUTextureView Application::GetNextSurfaceTextureView()
+wgpu::TextureView Application::GetNextSurfaceTextureView()
 {
     // Get the surface texture
-    WGPUSurfaceTexture surfaceTexture;
-    wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
-    if (surfaceTexture.status != WGPUSurfaceGetCurrentTextureStatus_Success)
+    wgpu::SurfaceTexture surfaceTexture;
+    surface.GetCurrentTexture(&surfaceTexture);
+    if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::Success)
     {
         return nullptr;
     }
 
     // Create a view for this surface texture
-    WGPUTextureViewDescriptor viewDescriptor;
+    wgpu::TextureViewDescriptor viewDescriptor;
     viewDescriptor.nextInChain = nullptr;
     viewDescriptor.label       = WebGPUUtils::GenerateString("Surface texture view");
 #ifndef __EMSCRIPTEN__
-    viewDescriptor.usage = WGPUTextureUsage_RenderAttachment;
+    viewDescriptor.usage = wgpu::TextureUsage::RenderAttachment;
 #endif
-    viewDescriptor.format          = wgpuTextureGetFormat(surfaceTexture.texture);
-    viewDescriptor.dimension       = WGPUTextureViewDimension_2D;
+    viewDescriptor.format          = surfaceTexture.texture.GetFormat();
+    viewDescriptor.dimension       = wgpu::TextureViewDimension::e2D;
     viewDescriptor.baseMipLevel    = 0;
     viewDescriptor.mipLevelCount   = 1;
     viewDescriptor.baseArrayLayer  = 0;
     viewDescriptor.arrayLayerCount = 1;
-    viewDescriptor.aspect          = WGPUTextureAspect_All;
+    viewDescriptor.aspect          = wgpu::TextureAspect::All;
 
-    WGPUTextureView targetView = wgpuTextureCreateView(surfaceTexture.texture, &viewDescriptor);
-
-    wgpuTextureRelease(surfaceTexture.texture);
+    wgpu::TextureView targetView = surfaceTexture.texture.CreateView(&viewDescriptor);
 
     return targetView;
 }
 
-void Application::UpdateViewMatrix()
-{
-    float cx            = std::cos(cameraState.angles.x);
-    float sx            = std::sin(cameraState.angles.x);
-    float cy            = std::cos(cameraState.angles.y);
-    float sy            = std::sin(cameraState.angles.y);
-    glm::vec3 position  = glm::vec3(cx * cy, sx * cy, sy) * std::exp(-cameraState.zoom);
-    uniforms.viewMatrix = glm::lookAt(position, glm::vec3(0.0f), glm::vec3(0, 0, 1));
-    wgpuQueueWriteBuffer(queue,
-                         uniformBuffer,
-                         offsetof(MyUniforms, viewMatrix),
-                         &uniforms.viewMatrix,
-                         sizeof(MyUniforms::viewMatrix));
-}
-
-void Application::OnMouseMove()
-{
-    if (!dragState.active)
-    {
-        return;
-    }
-
-    SDL_SetRelativeMouseMode(SDL_FALSE);
-
-    int x = 0, y = 0;
-    SDL_GetMouseState(&x, &y);
-
-    glm::vec2 currentMouse = glm::vec2(-(float)x, (float)y);
-    glm::vec2 delta        = (currentMouse - dragState.startMouse) * dragState.sensitivity;
-    cameraState.angles     = dragState.startCameraState.angles + delta;
-    // Clamp to avoid going too far when orbitting up/down
-    cameraState.angles.y = glm::clamp(cameraState.angles.y, -PI / 2 + 1e-5f, PI / 2 - 1e-5f);
-    UpdateViewMatrix();
-
-    // Inertia
-    dragState.velocity      = delta - dragState.previousDelta;
-    dragState.previousDelta = delta;
-}
-
-void Application::OnMouseButton(SDL_Event& event)
-{
-    static constexpr int LEFT_BUTTON = 1;
-    if (!SDL_BUTTON(LEFT_BUTTON))
-    {
-        return;
-    }
-
-    bool isPressed = event.type == SDL_MOUSEBUTTONDOWN ? true : false;
-    if (isPressed)
-    {
-        SDL_SetRelativeMouseMode(SDL_TRUE);
-
-        dragState.active = true;
-        int x = 0, y = 0;
-        SDL_GetRelativeMouseState(&x, &y);
-        dragState.startMouse       = glm::vec2(-(float)x, (float)y);
-        dragState.startCameraState = cameraState;
-    }
-    else
-    {
-        dragState.active = false;
-    }
-}
-
-void Application::OnScroll(SDL_Event& event)
-{
-    assert(event.type == SDL_MOUSEWHEEL);
-
-    cameraState.zoom += dragState.scrollSensitivity * static_cast<float>(event.wheel.y);
-    cameraState.zoom = glm::clamp(cameraState.zoom, -2.0f, 2.0f);
-    UpdateViewMatrix();
-}
-
-void Application::SetDefaultLimits(WGPULimits& limits) const
+void Application::SetDefaultLimits(wgpu::Limits& limits) const
 {
     limits.maxTextureDimension1D                     = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxTextureDimension2D                     = WGPU_LIMIT_U32_UNDEFINED;
@@ -873,12 +464,12 @@ void Application::SetDefaultLimits(WGPULimits& limits) const
     limits.maxStorageBuffersPerShaderStage           = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxStorageTexturesPerShaderStage          = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxUniformBuffersPerShaderStage           = WGPU_LIMIT_U32_UNDEFINED;
-    limits.maxUniformBufferBindingSize               = WGPU_LIMIT_U64_UNDEFINED;
-    limits.maxStorageBufferBindingSize               = WGPU_LIMIT_U64_UNDEFINED;
+    limits.maxUniformBufferBindingSize               = WGPU_LIMIT_U32_UNDEFINED;
+    limits.maxStorageBufferBindingSize               = WGPU_LIMIT_U32_UNDEFINED;
     limits.minUniformBufferOffsetAlignment           = WGPU_LIMIT_U32_UNDEFINED;
     limits.minStorageBufferOffsetAlignment           = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxVertexBuffers                          = WGPU_LIMIT_U32_UNDEFINED;
-    limits.maxBufferSize                             = WGPU_LIMIT_U64_UNDEFINED;
+    limits.maxBufferSize                             = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxVertexAttributes                       = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxVertexBufferArrayStride                = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxInterStageShaderComponents             = WGPU_LIMIT_U32_UNDEFINED;

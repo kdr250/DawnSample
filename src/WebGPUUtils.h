@@ -1,6 +1,6 @@
 #pragma once
 
-#include <webgpu/webgpu.h>
+#include <webgpu/webgpu_cpp.h>
 #include <string>
 
 #ifdef __EMSCRIPTEN__
@@ -14,31 +14,32 @@ namespace WebGPUUtils
     /**
      * Utility function to get a WebGPU adapter
      */
-    WGPUAdapter RequestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions const* options);
+    wgpu::Adapter RequestAdapterSync(wgpu::Instance instance,
+                                     wgpu::RequestAdapterOptions const* options);
 
     /**
      * Utility function to get a WebGPU device
      */
-    WGPUDevice RequestDeviceSync(WGPUAdapter adapter, WGPUDeviceDescriptor const* descripter);
+    wgpu::Device RequestDeviceSync(wgpu::Adapter adapter, wgpu::DeviceDescriptor const* descripter);
 
     /**
      * An example of how we can inspect the capabilities of the hardware through
      * the adapter object.
      */
-    void InspectAdapter(WGPUAdapter adapter);
+    void InspectAdapter(wgpu::Adapter adapter);
 
     /**
      * Display information about a device
      */
-    void InspectDevice(WGPUDevice device);
+    void InspectDevice(wgpu::Device device);
 
     /**
      * Helper function to get texture format
      */
-    WGPUTextureFormat GetTextureFormat(WGPUSurface surface, WGPUAdapter adapter);
+    wgpu::TextureFormat GetTextureFormat(wgpu::Surface surface, wgpu::Adapter adapter);
 
     /**
-     * Helper function for const char* and WGPUStringView
+     * Helper function for const char* and wgpu::StringView
      */
 #ifdef __EMSCRIPTEN__
     inline const char* GenerateString(const char* str)
@@ -46,24 +47,9 @@ namespace WebGPUUtils
         return str;
     }
 #else
-    inline WGPUStringView GenerateString(const char* str)
+    inline wgpu::StringView GenerateString(const char* str)
     {
         return {str, strlen(str)};
-    }
-#endif
-
-    /**
-     * Helper function for bool
-     */
-#ifdef __EMSCRIPTEN__
-    inline bool GenerateBool(const bool flag)
-    {
-        return flag;
-    }
-#else
-    inline WGPUOptionalBool GenerateBool(const bool flag)
-    {
-        return flag ? WGPUOptionalBool_True : WGPUOptionalBool_False;
     }
 #endif
 
