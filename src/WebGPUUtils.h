@@ -53,17 +53,17 @@ namespace WebGPUUtils
 #endif
 
     /**
-     * Helper function for bool
+     * Helper function to tick
      */
 #ifdef __EMSCRIPTEN__
-    inline bool GenerateBool(const bool flag)
+    inline void DeviceTick(WGPUDevice /* device */)
     {
-        return flag;
+        emscripten_sleep(100);
     }
 #else
-    inline WGPUOptionalBool GenerateBool(const bool flag)
+    inline void DeviceTick(WGPUDevice device)
     {
-        return flag ? WGPUOptionalBool_True : WGPUOptionalBool_False;
+        wgpuDeviceTick(device);
     }
 #endif
 

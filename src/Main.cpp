@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
         Application* pApp = reinterpret_cast<Application*>(arg);
         pApp->MainLoop();
     };
-    emscripten_set_main_loop_arg(callback, &app, 60, true);
+    emscripten_set_main_loop_arg(callback, &app, 0, true);
 #else
     while (app.IsRunning())
     {
