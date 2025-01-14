@@ -84,60 +84,58 @@ bool Application::Initialize()
     deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
 
 #ifdef __EMSCRIPTEN__
-    // // TODO
-    // deviceDesc.deviceLostCallback =
-    //     [](wgpu::DeviceLostReason reason, char const* message, void* /* pUserData */)
-    // {
-    //     SDL_Log("Device lost: reason 0x%08X", reason);
-    //     if (message)
-    //     {
-    //         SDL_Log(" - message: %s", message);
-    //     }
-    // };
+    deviceDesc.deviceLostCallback =
+        [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
+    {
+        SDL_Log("Device lost: reason 0x%08X", reason);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
 #else
-    // // TODO
-    // deviceDesc.deviceLostCallbackInfo2.nextInChain = nullptr;
-    // deviceDesc.deviceLostCallbackInfo2.mode        = wgpu::CallbackMode::WaitAnyOnly;
-    // deviceDesc.deviceLostCallbackInfo2.callback    = [](const wgpu::Device* device,
-    //                                                  wgpu::DeviceLostReason reason,
-    //                                                  wgpu::StringView message,
-    //                                                  void* /* pUserData1 */,
-    //                                                  void* /* pUserData2 */)
-    // {
-    //     SDL_Log("Device lost: reason 0x%08X", reason);
-    //     if (message.data)
-    //     {
-    //         SDL_Log(" - message: %s", message.data);
-    //     }
-    // };
-    // deviceDesc.uncapturedErrorCallbackInfo2.nextInChain = nullptr;
-    // deviceDesc.uncapturedErrorCallbackInfo2.callback    = [](const wgpu::Device* device,
-    //                                                       wgpu::ErrorType type,
-    //                                                       wgpu::StringView message,
-    //                                                       void* /* pUserData1 */,
-    //                                                       void* /* pUserData2 */)
-    // {
-    //     SDL_Log("Uncaptured device error: type 0x%08X", type);
-    //     if (message.data)
-    //     {
-    //         SDL_Log(" - message: %s", message.data);
-    //     }
-    // };
+    auto deviceLostCallback = [](const wgpu::Device& device,
+                                 wgpu::DeviceLostReason reason,
+                                 const char* message,
+                                 void* /* userData */)
+    {
+        SDL_Log("Device lost: reason 0x%08X", reason);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
+                                     deviceLostCallback,
+                                     (void*)nullptr);
+
+    auto uncapturedErrorCallback = [](const wgpu::Device& device,
+                                      wgpu::ErrorType type,
+                                      const char* message,
+                                      void* /* pUserData */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+
+    deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback, (void*)nullptr);
 #endif
 
     device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
 
 #ifdef __EMSCRIPTEN__
-    // // TODO
-    // auto onDeviceError = [](wgpu::ErrorType type, char const* message, void* /* pUserData */)
-    // {
-    //     SDL_Log("Uncaptured device error: type 0x%08X", type);
-    //     if (message)
-    //     {
-    //         SDL_Log(" - message: %s", message);
-    //     }
-    // };
-    // wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
+    auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+    device.SetUncapturedErrorCallback(onDeviceError, (void*)nullptr);
 #endif
 
     WebGPUUtils::InspectDevice(device);
