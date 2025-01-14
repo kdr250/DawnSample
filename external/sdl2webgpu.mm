@@ -149,7 +149,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 #ifdef SDL_VIDEO_DRIVER_EMSCRIPTEN
     {
         wgpu::SurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
-        fromCanvasHTMLSelector.chain.sType = wgpu::SType_SurfaceDescriptorFromCanvasHTMLSelector;
+        fromCanvasHTMLSelector.chain.sType = wgpu::SType::SurfaceDescriptorFromCanvasHTMLSelector;
 
         fromCanvasHTMLSelector.chain.next = NULL;
         fromCanvasHTMLSelector.selector   = "canvas";

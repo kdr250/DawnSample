@@ -50,7 +50,7 @@ wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
 #endif
 
     instance.RequestAdapter(options,
-                            wgpu::CallbackMode::WaitAnyOnly,
+                            wgpu::CallbackMode::AllowSpontaneous,
                             onAdapterRequestEnded,
                             &userData);
 
@@ -112,7 +112,7 @@ wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Adapter adapter,
 #endif
 
     adapter.RequestDevice(descripter,
-                          wgpu::CallbackMode::WaitAnyOnly,
+                          wgpu::CallbackMode::AllowSpontaneous,
                           onDeviceRequestEnded,
                           &userData);
 

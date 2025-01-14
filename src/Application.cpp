@@ -232,9 +232,11 @@ void Application::MainLoop()
     // Create the render pass that clears the screen with our color
     wgpu::RenderPassDescriptor renderPassDesc = {};
     renderPassDesc.nextInChain                = nullptr;
+    renderPassDesc.label                      = WebGPUUtils::GenerateString("Render Pass");
 
     // The attachment part of the render pass descriptor describes the target texture of the pass
     wgpu::RenderPassColorAttachment renderPassColorAttachment = {};
+    renderPassColorAttachment.nextInChain                     = nullptr;
     renderPassColorAttachment.view                            = targetView;
     renderPassColorAttachment.resolveTarget                   = nullptr;
     renderPassColorAttachment.loadOp                          = wgpu::LoadOp::Clear;
@@ -256,21 +258,21 @@ void Application::MainLoop()
     renderPass.Draw(vertexCount, 1, 0, 0);
     renderPass.End();
 
-    wgpuRenderPassEncoderRelease(renderPass.Get());
-
     // Finally encode and submit the render pass
-    wgpu::CommandBufferDescriptor cmdBufferDescriptor = {};
-    cmdBufferDescriptor.nextInChain                   = nullptr;
-    cmdBufferDescriptor.label = WebGPUUtils::GenerateString("Command buffer");
+    wgpu::CommandBufferDescriptor cmdBufferDescriptor;
+    cmdBufferDescriptor.nextInChain = nullptr;
+    cmdBufferDescriptor.label       = WebGPUUtils::GenerateString("Command buffer");
 
     wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
-    wgpuCommandEncoderRelease(encoder.Get());
 
     queue.Submit(1, &command);
-    wgpuCommandBufferRelease(command.Get());
+
+    //wgpuRenderPassEncoderRelease(renderPass.Get());
+    //wgpuCommandEncoderRelease(encoder.Des);
+    //wgpuCommandBufferRelease(command.Get());
 
     // At the end of the frame
-    wgpuTextureViewRelease(targetView.Get());
+    //wgpuTextureViewRelease(targetView.Get());
 
 #ifndef __EMSCRIPTEN__
     surface.Present();
@@ -345,7 +347,7 @@ void Application::InitializePipeline()
     pipelineDesc.vertex.buffers     = &vertexBufferLayout;
 
     pipelineDesc.vertex.module        = shaderModule;
-    pipelineDesc.vertex.entryPoint    = WebGPUUtils::GenerateString("vs::main");
+    pipelineDesc.vertex.entryPoint    = WebGPUUtils::GenerateString("vs_main");
     pipelineDesc.vertex.constantCount = 0;
     pipelineDesc.vertex.constants     = nullptr;
 
@@ -358,7 +360,7 @@ void Application::InitializePipeline()
     // Describe fragment pipeline
     wgpu::FragmentState fragmentState {};
     fragmentState.module        = shaderModule;
-    fragmentState.entryPoint    = WebGPUUtils::GenerateString("fs::main");
+    fragmentState.entryPoint    = WebGPUUtils::GenerateString("fs_main");
     fragmentState.constantCount = 0;
     fragmentState.constants     = nullptr;
 
