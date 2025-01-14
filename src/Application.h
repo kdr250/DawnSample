@@ -38,4 +38,7 @@ private:
     uint32_t vertexCount;
 
     bool isRunning = true;
+
+    Uint64 tickCount = 0;
+    float deltaTime  = 0.0f;
 };

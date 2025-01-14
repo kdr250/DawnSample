@@ -204,6 +204,15 @@ void Application::MainLoop()
         isRunning = false;
     }
 
+#ifndef __EMSCRIPTEN__
+    // Wait until 16ms has elapsed since last frame
+    while (!SDL_TICKS_PASSED(SDL_GetTicks64(), tickCount + 16))
+        ;
+#endif
+    float delta = (SDL_GetTicks64() - tickCount) / 1000.0f;
+    deltaTime   = std::min(delta, 0.05f);
+    tickCount   = SDL_GetTicks64();
+
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
@@ -257,10 +266,8 @@ void Application::MainLoop()
 
 #ifndef __EMSCRIPTEN__
     surface.Present();
+    device.Tick();
 #endif
-
-    // tick
-    WebGPUUtils::DeviceTick(device);
 }
 
 bool Application::IsRunning()
