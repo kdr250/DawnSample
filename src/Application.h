@@ -1,7 +1,7 @@
 #pragma once
 
 #include <SDL2/SDL.h>
-#include <webgpu/webgpu.h>
+#include <webgpu/webgpu_cpp.h>
 
 class Application
 {
@@ -19,22 +19,22 @@ public:
     bool IsRunning();
 
 private:
-    void SetDefaultLimits(WGPULimits& limits) const;
-    WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
+    void SetDefaultLimits(wgpu::Limits& limits) const;
+    wgpu::RequiredLimits GetRequiredLimits(wgpu::Adapter adapter) const;
 
     void InitializePipeline();
 
     void InitializeBuffers();
 
-    WGPUTextureView GetNextSurfaceTextureView();
+    wgpu::TextureView GetNextSurfaceTextureView();
 
     SDL_Window* window;
-    WGPUDevice device;
-    WGPUQueue queue;
-    WGPUSurface surface;
-    WGPURenderPipeline pipeline;
-    WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
-    WGPUBuffer vertexBuffer;
+    wgpu::Device device;
+    wgpu::Queue queue;
+    wgpu::Surface surface;
+    wgpu::RenderPipeline pipeline;
+    wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
+    wgpu::Buffer vertexBuffer;
     uint32_t vertexCount;
 
     bool isRunning = true;

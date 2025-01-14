@@ -4,24 +4,24 @@
 #include <cassert>
 #include <vector>
 
-WGPUAdapter WebGPUUtils::RequestAdapterSync(WGPUInstance instance,
-                                            WGPURequestAdapterOptions const* options)
+wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
+                                              wgpu::RequestAdapterOptions const* options)
 {
     struct UserData
     {
-        WGPUAdapter adapter = nullptr;
-        bool requestEnded   = false;
+        wgpu::Adapter adapter = nullptr;
+        bool requestEnded     = false;
     };
     UserData userData;
 
 #ifdef __EMSCRIPTEN__
-    auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status,
-                                    WGPUAdapter adapter,
+    auto onAdapterRequestEnded = [](wgpu::RequestAdapterStatus status,
+                                    wgpu::Adapter adapter,
                                     const char* message,
                                     void* pUserData)
     {
         UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == WGPURequestAdapterStatus_Success)
+        if (status == wgpu::RequestAdapterStatus::Success)
         {
             userData.adapter = adapter;
         }
@@ -32,25 +32,27 @@ WGPUAdapter WebGPUUtils::RequestAdapterSync(WGPUInstance instance,
         userData.requestEnded = true;
     };
 #else
-    auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status,
-                                    WGPUAdapter adapter,
-                                    WGPUStringView message,
-                                    void* pUserData)
+    auto onAdapterRequestEnded = [](wgpu::RequestAdapterStatus status,
+                                    wgpu::Adapter adapter,
+                                    wgpu::StringView message,
+                                    UserData* pUserData)
     {
-        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == WGPURequestAdapterStatus_Success)
+        if (status == wgpu::RequestAdapterStatus::Success)
         {
-            userData.adapter = adapter;
+            pUserData->adapter = adapter;
         }
         else
         {
             SDL_Log("Could not get WebGPU adapter: %s", message.data);
         }
-        userData.requestEnded = true;
+        pUserData->requestEnded = true;
     };
 #endif
 
-    wgpuInstanceRequestAdapter(instance, options, onAdapterRequestEnded, (void*)&userData);
+    instance.RequestAdapter(options,
+                            wgpu::CallbackMode::WaitAnyOnly,
+                            onAdapterRequestEnded,
+                            &userData);
 
 #ifdef __EMSCRIPTEN__
     while (!userData.requestEnded)
@@ -64,22 +66,24 @@ WGPUAdapter WebGPUUtils::RequestAdapterSync(WGPUInstance instance,
     return userData.adapter;
 }
 
-WGPUDevice WebGPUUtils::RequestDeviceSync(WGPUAdapter adapter,
-                                          WGPUDeviceDescriptor const* descripter)
+wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Adapter adapter,
+                                            wgpu::DeviceDescriptor const* descripter)
 {
     struct UserData
     {
-        WGPUDevice device = nullptr;
-        bool requestEnded = false;
+        wgpu::Device device = nullptr;
+        bool requestEnded   = false;
     };
     UserData userData;
 
 #ifdef __EMSCRIPTEN__
-    auto onDeviceRequestEnded =
-        [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* pUserData)
+    auto onDeviceRequestEnded = [](wgpu::RequestDeviceStatus status,
+                                   wgpu::Device device,
+                                   char const* message,
+                                   void* pUserData)
     {
         UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == WGPURequestDeviceStatus_Success)
+        if (status == wgpu::RequestDeviceStatus_Success)
         {
             userData.device = device;
         }
@@ -90,25 +94,27 @@ WGPUDevice WebGPUUtils::RequestDeviceSync(WGPUAdapter adapter,
         userData.requestEnded = true;
     };
 #else
-    auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status,
-                                   WGPUDevice device,
-                                   WGPUStringView message,
-                                   void* pUserData)
+    auto onDeviceRequestEnded = [](wgpu::RequestDeviceStatus status,
+                                   wgpu::Device device,
+                                   wgpu::StringView message,
+                                   UserData* userData)
     {
-        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        if (status == WGPURequestDeviceStatus_Success)
+        if (status == wgpu::RequestDeviceStatus::Success)
         {
-            userData.device = device;
+            userData->device = device;
         }
         else
         {
             SDL_Log("Could not get WebGPU device: %s", message.data);
         }
-        userData.requestEnded = true;
+        userData->requestEnded = true;
     };
 #endif
 
-    wgpuAdapterRequestDevice(adapter, descripter, onDeviceRequestEnded, (void*)&userData);
+    adapter.RequestDevice(descripter,
+                          wgpu::CallbackMode::WaitAnyOnly,
+                          onDeviceRequestEnded,
+                          &userData);
 
 #ifdef __EMSCRIPTEN__
     while (!userData.requestEnded)
@@ -122,10 +128,10 @@ WGPUDevice WebGPUUtils::RequestDeviceSync(WGPUAdapter adapter,
     return userData.device;
 }
 
-void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
+void WebGPUUtils::InspectAdapter(wgpu::Adapter adapter)
 {
 #ifdef __EMSCRIPTEN__
-    std::vector<WGPUFeatureName> features;
+    std::vector<wgpu::FeatureName> features;
 
     // Call the function a first time with a null return address, just to get
     // the entry count.
@@ -143,8 +149,8 @@ void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
         SDL_Log(" - 0x%08X", feature);
     }
 
-    WGPUAdapterProperties properties = {};
-    properties.nextInChain           = nullptr;
+    wgpu::AdapterProperties properties = {};
+    properties.nextInChain             = nullptr;
     wgpuAdapterGetProperties(adapter, &properties);
     SDL_Log("Adapter properties:");
     SDL_Log(" - vendorID: %i", properties.vendorID);
@@ -168,11 +174,11 @@ void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
     SDL_Log(" - adapterType: 0x%08X", properties.adapterType);
     SDL_Log(" - backendType: 0x%08X", properties.backendType);
 #else
-    WGPUSupportedLimits supportedLimits = {};
-    supportedLimits.nextInChain         = nullptr;
+    wgpu::SupportedLimits supportedLimits = {};
+    supportedLimits.nextInChain           = nullptr;
 
-    WGPUStatus status = wgpuAdapterGetLimits(adapter, &supportedLimits);
-    if (status == WGPUStatus_Success)
+    wgpu::Status status = adapter.GetLimits(&supportedLimits);
+    if (status == wgpu::Status::Success)
     {
         SDL_Log("Adapter limits:");
         SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.limits.maxTextureDimension1D);
@@ -181,8 +187,8 @@ void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
         SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
     }
 
-    WGPUSupportedFeatures features;
-    wgpuAdapterGetFeatures(adapter, &features);
+    wgpu::SupportedFeatures features;
+    adapter.GetFeatures(&features);
 
     SDL_Log("Adapter features:");
     for (int i = 0; i < features.featureCount; ++i)
@@ -191,9 +197,9 @@ void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
         SDL_Log(" - 0x%08X", feature);
     }
 
-    WGPUAdapterInfo info;
+    wgpu::AdapterInfo info;
     info.nextInChain = nullptr;
-    wgpuAdapterGetInfo(adapter, &info);
+    adapter.GetInfo(&info);
 
     SDL_Log("Adapter properties:");
     SDL_Log(" - vendorID: %i", info.vendorID);
@@ -219,10 +225,10 @@ void WebGPUUtils::InspectAdapter(WGPUAdapter adapter)
 #endif
 }
 
-void WebGPUUtils::InspectDevice(WGPUDevice device)
+void WebGPUUtils::InspectDevice(wgpu::Device device)
 {
 #ifdef __EMSCRIPTEN__
-    std::vector<WGPUFeatureName> features;
+    std::vector<wgpu::FeatureName> features;
     size_t featureCount = wgpuDeviceEnumerateFeatures(device, nullptr);
     features.resize(featureCount);
     wgpuDeviceEnumerateFeatures(device, features.data());
@@ -233,8 +239,8 @@ void WebGPUUtils::InspectDevice(WGPUDevice device)
         SDL_Log(" - 0x%08X", feature);
     }
 
-    WGPUSupportedLimits supportedLimits = {};
-    supportedLimits.nextInChain         = nullptr;
+    wgpu::SupportedLimits supportedLimits = {};
+    supportedLimits.nextInChain           = nullptr;
 
     bool success = wgpuDeviceGetLimits(device, &supportedLimits);
 
@@ -247,8 +253,8 @@ void WebGPUUtils::InspectDevice(WGPUDevice device)
         SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
     }
 #else
-    WGPUSupportedFeatures features;
-    wgpuDeviceGetFeatures(device, &features);
+    wgpu::SupportedFeatures features;
+    device.GetFeatures(&features);
 
     SDL_Log("Device features:");
     for (int i = 0; i < features.featureCount; ++i)
@@ -257,11 +263,11 @@ void WebGPUUtils::InspectDevice(WGPUDevice device)
         SDL_Log(" - 0x%08X", feature);
     }
 
-    WGPUSupportedLimits supportedLimits = {};
-    supportedLimits.nextInChain         = nullptr;
-    WGPUStatus status                   = wgpuDeviceGetLimits(device, &supportedLimits);
+    wgpu::SupportedLimits supportedLimits = {};
+    supportedLimits.nextInChain           = nullptr;
+    wgpu::Status status                   = device.GetLimits(&supportedLimits);
 
-    if (status == WGPUStatus_Success)
+    if (status == wgpu::Status::Success)
     {
         SDL_Log("Device limits:");
         SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.limits.maxTextureDimension1D);
@@ -272,19 +278,19 @@ void WebGPUUtils::InspectDevice(WGPUDevice device)
 #endif
 }
 
-WGPUTextureFormat WebGPUUtils::GetTextureFormat(WGPUSurface surface, WGPUAdapter adapter)
+wgpu::TextureFormat WebGPUUtils::GetTextureFormat(wgpu::Surface surface, wgpu::Adapter adapter)
 {
 #ifdef __EMSCRIPTEN__
-    WGPUTextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+    wgpu::TextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 #else
-    WGPUSurfaceCapabilities capabilities;
-    WGPUStatus status = wgpuSurfaceGetCapabilities(surface, adapter, &capabilities);
-    if (status != WGPUStatus_Success)
+    wgpu::SurfaceCapabilities capabilities;
+    wgpu::Status status = surface.GetCapabilities(adapter, &capabilities);
+    if (status != wgpu::Status::Success)
     {
-        SDL_Log("Could not get surface capabilities! return WGPUTextureFormat_Undefined");
-        return WGPUTextureFormat_Undefined;
+        SDL_Log("Could not get surface capabilities! return wgpu::TextureFormat_Undefined");
+        return wgpu::TextureFormat::Undefined;
     }
-    WGPUTextureFormat surfaceFormat = capabilities.formats[0];
+    wgpu::TextureFormat surfaceFormat = capabilities.formats[0];
 #endif
 
     return surfaceFormat;
