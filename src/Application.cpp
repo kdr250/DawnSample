@@ -73,8 +73,6 @@ bool Application::Initialize()
 
     WebGPUUtils::InspectAdapter(adapter);
 
-    wgpuInstanceRelease(instance.Get());
-
     // Requesting Device
     wgpu::DeviceDescriptor deviceDesc   = {};
     deviceDesc.nextInChain              = nullptr;
@@ -161,8 +159,6 @@ bool Application::Initialize()
 
     surface.Configure(&config);
 
-    wgpuAdapterRelease(adapter.Get());
-
     InitializePipeline();
     InitializeBuffers();
 
@@ -171,14 +167,6 @@ bool Application::Initialize()
 
 void Application::Terminate()
 {
-    // Terminate WebGPU
-    wgpuBufferRelease(vertexBuffer.Get());
-    wgpuRenderPipelineRelease(pipeline.Get());
-    wgpuSurfaceUnconfigure(surface.Get());
-    wgpuQueueRelease(queue.Get());
-    wgpuSurfaceRelease(surface.Get());
-    wgpuDeviceRelease(device.Get());
-
     // Terminate SDL
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -266,13 +254,6 @@ void Application::MainLoop()
     wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
 
     queue.Submit(1, &command);
-
-    //wgpuRenderPassEncoderRelease(renderPass.Get());
-    //wgpuCommandEncoderRelease(encoder.Des);
-    //wgpuCommandBufferRelease(command.Get());
-
-    // At the end of the frame
-    //wgpuTextureViewRelease(targetView.Get());
 
 #ifndef __EMSCRIPTEN__
     surface.Present();
@@ -394,8 +375,6 @@ void Application::InitializePipeline()
     pipelineDesc.layout = nullptr;
 
     pipeline = device.CreateRenderPipeline(&pipelineDesc);
-
-    wgpuShaderModuleRelease(shaderModule.Get());
 }
 
 void Application::InitializeBuffers()
@@ -454,8 +433,6 @@ wgpu::TextureView Application::GetNextSurfaceTextureView()
     viewDescriptor.aspect          = wgpu::TextureAspect::All;
 
     wgpu::TextureView targetView = surfaceTexture.texture.CreateView(&viewDescriptor);
-
-    wgpuTextureRelease(surfaceTexture.texture.Get());
 
     return targetView;
 }
