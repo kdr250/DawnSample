@@ -4,10 +4,6 @@
 #include <cassert>
 #include <vector>
 
-#ifdef __EMSCRIPTEN__
-    #include <webgpu/webgpu.h>
-#endif
-
 wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
                                               wgpu::RequestAdapterOptions const* options)
 {
