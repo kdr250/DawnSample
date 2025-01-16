@@ -1,4 +1,5 @@
 *
+!*.txt
 !*.vert
 !*.frag
 !.gitignore
