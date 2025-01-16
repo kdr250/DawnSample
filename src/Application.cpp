@@ -27,7 +27,8 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = vec4f(in.position, 0.0, 1.0);
+    let ratio = 1024.0 / 768.0;
+    out.position = vec4f(in.position.x, in.position.y * ratio, 0.0, 1.0);
     out.color = in.color;
     return out;
 }
@@ -264,8 +265,9 @@ void Application::MainLoop()
 
     // set pipeline to renderpass and draw
     renderPass.SetPipeline(pipeline);
-    renderPass.SetVertexBuffer(0, vertexBuffer, 0, vertexBuffer.GetSize());
-    renderPass.Draw(vertexCount, 1, 0, 0);
+    renderPass.SetVertexBuffer(0, pointBuffer, 0, pointBuffer.GetSize());
+    renderPass.SetIndexBuffer(indexBuffer, wgpu::IndexFormat::Uint16, 0, indexBuffer.GetSize());
+    renderPass.DrawIndexed(indexCount, 1, 0, 0, 0);
     renderPass.End();
 
     // Finally encode and submit the render pass
@@ -409,54 +411,42 @@ void Application::InitializePipeline()
 
 void Application::InitializeBuffers()
 {
-    // Vertex buffer data
-    std::vector<float> vertexData = {// x0,  y0,  r0,  g0,  b0
-                                     -0.5,
-                                     -0.5,
-                                     1.0,
-                                     0.0,
-                                     0.0,
+    // Define point data
+    std::vector<float> pointData = {
+        // x,   y,     r,   g,   b
+        -0.5, -0.5, 1.0, 0.0, 0.0,  // Point #0
+        +0.5, -0.5, 0.0, 1.0, 0.0,  // Point #1
+        +0.5, +0.5, 0.0, 0.0, 1.0,  // Point #2
+        -0.5, +0.5, 1.0, 1.0, 0.0   // Point #3
+    };
 
-                                     // x1,  y1,  r1,  g1,  b1
-                                     +0.5,
-                                     -0.5,
-                                     0.0,
-                                     1.0,
-                                     0.0,
+    // Define index data
+    std::vector<uint16_t> indexData = {0,  // Triangle #0 connects points #0, #1 and #2
+                                       1,
+                                       2,
+                                       0,  // Triangle #1 connects points #0, #2 and #3
+                                       2,
+                                       3};
 
-                                     // ...
-                                     +0.0,
-                                     +0.5,
-                                     0.0,
-                                     0.0,
-                                     1.0,
-                                     -0.55f,
-                                     -0.5,
-                                     1.0,
-                                     1.0,
-                                     0.0,
-                                     -0.05f,
-                                     +0.5,
-                                     1.0,
-                                     0.0,
-                                     1.0,
-                                     -0.55f,
-                                     +0.5,
-                                     0.0,
-                                     1.0,
-                                     1.0};
-
-    vertexCount = static_cast<uint32_t>(vertexData.size() / 5);
+    indexCount = static_cast<uint32_t>(indexData.size());
 
     // Create vertex buffer
     wgpu::BufferDescriptor bufferDesc {};
     bufferDesc.nextInChain      = nullptr;
-    bufferDesc.size             = vertexData.size() * sizeof(float);
+    bufferDesc.size             = pointData.size() * sizeof(float);
     bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
     bufferDesc.mappedAtCreation = false;
-    vertexBuffer                = device.CreateBuffer(&bufferDesc);
+    pointBuffer                 = device.CreateBuffer(&bufferDesc);
 
-    queue.WriteBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+    queue.WriteBuffer(pointBuffer, 0, pointData.data(), bufferDesc.size);
+
+    // Create index buffer
+    bufferDesc.size  = indexData.size() * sizeof(uint16_t);
+    bufferDesc.size  = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
+    bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
+    indexBuffer      = device.CreateBuffer(&bufferDesc);
+
+    queue.WriteBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 }
 
 wgpu::TextureView Application::GetNextSurfaceTextureView()
