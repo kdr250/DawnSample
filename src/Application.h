@@ -34,8 +34,9 @@ private:
     wgpu::Surface surface;
     wgpu::RenderPipeline pipeline;
     wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
-    wgpu::Buffer vertexBuffer;
-    uint32_t vertexCount;
+    wgpu::Buffer pointBuffer;
+    wgpu::Buffer indexBuffer;
+    uint32_t indexCount;
 
     bool isRunning = true;
 
