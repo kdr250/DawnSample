@@ -14,14 +14,27 @@
 // We embbed the source of the shader module here
 const char* shaderSource = R"(
 
+struct VertexInput {
+    @location(0) position: vec2f,
+    @location(1) color: vec3f,
+};
+
+struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) color: vec3f,
+};
+
 @vertex
-fn vs_main(@location(0) in_vertex_position: vec2f) -> @builtin(position) vec4f {
-    return vec4f(in_vertex_position, 0.0, 1.0);
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    out.position = vec4f(in.position, 0.0, 1.0);
+    out.color = in.color;
+    return out;
 }
 
 @fragment
-fn fs_main() -> @location(0) vec4f {
-    return vec4f(0.0, 0.4, 1.0, 1.0);
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+    return vec4f(in.color, 1.0);
 }
 
 )";
@@ -238,7 +251,7 @@ void Application::MainLoop()
     renderPassColorAttachment.resolveTarget                   = nullptr;
     renderPassColorAttachment.loadOp                          = wgpu::LoadOp::Clear;
     renderPassColorAttachment.storeOp                         = wgpu::StoreOp::Store;
-    renderPassColorAttachment.clearValue                      = wgpu::Color {0.9, 0.1, 0.2, 1.0};
+    renderPassColorAttachment.clearValue                      = {0.05, 0.05, 0.05, 1.0};
     renderPassColorAttachment.depthSlice                      = WGPU_DEPTH_SLICE_UNDEFINED;
 
     renderPassDesc.colorAttachmentCount   = 1;
@@ -285,15 +298,17 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     wgpu::RequiredLimits requiredLimits {};
     SetDefaultLimits(requiredLimits.limits);
 
-    requiredLimits.limits.maxVertexAttributes        = 1;
-    requiredLimits.limits.maxVertexBuffers           = 1;
-    requiredLimits.limits.maxBufferSize              = 6 * 2 * sizeof(float);
-    requiredLimits.limits.maxVertexBufferArrayStride = 2 * sizeof(float);
+    requiredLimits.limits.maxVertexAttributes        = 2;
+    requiredLimits.limits.maxVertexBuffers           = 2;
+    requiredLimits.limits.maxBufferSize              = 5 * 5 * sizeof(float);
+    requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
 
     requiredLimits.limits.maxUniformBufferBindingSize =
         supportedLimits.limits.maxUniformBufferBindingSize;
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
+
+    requiredLimits.limits.maxInterStageShaderComponents = 3;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -326,14 +341,17 @@ void Application::InitializePipeline()
 
     // Describe vertex pipeline
     wgpu::VertexBufferLayout vertexBufferLayout {};
-    wgpu::VertexAttribute positionAttrib;
-    positionAttrib.shaderLocation = 0;
-    positionAttrib.format         = wgpu::VertexFormat::Float32x2;
-    positionAttrib.offset         = 0;
+    std::vector<wgpu::VertexAttribute> positionAttribs(2);
+    positionAttribs[0].shaderLocation = 0;  // @location(0) position attribute
+    positionAttribs[0].format         = wgpu::VertexFormat::Float32x2;
+    positionAttribs[0].offset         = 0;
+    positionAttribs[1].shaderLocation = 1;  // @location(1) color attribute
+    positionAttribs[1].format         = wgpu::VertexFormat::Float32x3;
+    positionAttribs[1].offset         = 2 * sizeof(float);
 
-    vertexBufferLayout.attributeCount = 1;
-    vertexBufferLayout.attributes     = &positionAttrib;
-    vertexBufferLayout.arrayStride    = 2 * sizeof(float);
+    vertexBufferLayout.attributeCount = static_cast<uint32_t>(positionAttribs.size());
+    vertexBufferLayout.attributes     = positionAttribs.data();
+    vertexBufferLayout.arrayStride    = 5 * sizeof(float);
     vertexBufferLayout.stepMode       = wgpu::VertexStepMode::Vertex;
 
     pipelineDesc.vertex.bufferCount = 1;
@@ -392,21 +410,43 @@ void Application::InitializePipeline()
 void Application::InitializeBuffers()
 {
     // Vertex buffer data
-    std::vector<float> vertexData = {// first triangle
-                                     -0.5f,
-                                     -0.5f,
-                                     0.5f,
-                                     -0.5f,
-                                     0.0f,
-                                     0.5f,
-                                     // second triangle
+    std::vector<float> vertexData = {// x0,  y0,  r0,  g0,  b0
+                                     -0.5,
+                                     -0.5,
+                                     1.0,
+                                     0.0,
+                                     0.0,
+
+                                     // x1,  y1,  r1,  g1,  b1
+                                     +0.5,
+                                     -0.5,
+                                     0.0,
+                                     1.0,
+                                     0.0,
+
+                                     // ...
+                                     +0.0,
+                                     +0.5,
+                                     0.0,
+                                     0.0,
+                                     1.0,
                                      -0.55f,
-                                     -0.5f,
+                                     -0.5,
+                                     1.0,
+                                     1.0,
+                                     0.0,
                                      -0.05f,
-                                     0.5f,
+                                     +0.5,
+                                     1.0,
+                                     0.0,
+                                     1.0,
                                      -0.55f,
-                                     0.5f};
-    vertexCount                   = static_cast<uint32_t>(vertexData.size() / 2);
+                                     +0.5,
+                                     0.0,
+                                     1.0,
+                                     1.0};
+
+    vertexCount = static_cast<uint32_t>(vertexData.size() / 5);
 
     // Create vertex buffer
     wgpu::BufferDescriptor bufferDesc {};
