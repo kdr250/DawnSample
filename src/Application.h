@@ -19,14 +19,18 @@ public:
     bool IsRunning();
 
 private:
-    void SetDefaultLimits(wgpu::Limits& limits) const;
-    wgpu::RequiredLimits GetRequiredLimits(wgpu::Adapter adapter) const;
-
     void InitializePipeline();
 
     void InitializeBuffers();
 
+    void InitializeBindGroups();
+
     wgpu::TextureView GetNextSurfaceTextureView();
+
+    void SetDefaultLimits(wgpu::Limits& limits) const;
+    wgpu::RequiredLimits GetRequiredLimits(wgpu::Adapter adapter) const;
+
+    void SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingLayout);
 
     SDL_Window* window;
     wgpu::Device device;
@@ -37,6 +41,10 @@ private:
     wgpu::Buffer pointBuffer;
     wgpu::Buffer indexBuffer;
     uint32_t indexCount;
+    wgpu::Buffer uniformBuffer;
+    wgpu::PipelineLayout layout;
+    wgpu::BindGroupLayout bindGroupLayout;
+    wgpu::BindGroup bindGroup;
 
     bool isRunning = true;
 

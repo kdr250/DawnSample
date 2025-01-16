@@ -147,6 +147,7 @@ bool Application::Initialize()
 
     InitializePipeline();
     InitializeBuffers();
+    InitializeBindGroups();
 
     return true;
 }
@@ -199,6 +200,10 @@ void Application::MainLoop()
     deltaTime   = std::min(delta, 0.05f);
     tickCount   = SDL_GetTicks64();
 
+    // Update uniform buffer
+    float t = tickCount / 1000.0f;
+    queue.WriteBuffer(uniformBuffer, 0, &t, sizeof(float));
+
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
@@ -239,6 +244,7 @@ void Application::MainLoop()
     renderPass.SetPipeline(pipeline);
     renderPass.SetVertexBuffer(0, pointBuffer, 0, pointBuffer.GetSize());
     renderPass.SetIndexBuffer(indexBuffer, wgpu::IndexFormat::Uint16, 0, indexBuffer.GetSize());
+    renderPass.SetBindGroup(0, bindGroup, 0, nullptr);
     renderPass.DrawIndexed(indexCount, 1, 0, 0, 0);
     renderPass.End();
 
@@ -277,12 +283,14 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxBufferSize              = 15 * 5 * sizeof(float);
     requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
 
-    requiredLimits.limits.maxUniformBufferBindingSize =
-        supportedLimits.limits.maxUniformBufferBindingSize;
-    requiredLimits.limits.maxStorageBufferBindingSize =
-        supportedLimits.limits.maxStorageBufferBindingSize;
+    requiredLimits.limits.maxBindGroups                   = 1;
+    requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4;
 
     requiredLimits.limits.maxInterStageShaderComponents = 3;
+
+    requiredLimits.limits.maxStorageBufferBindingSize =
+        supportedLimits.limits.maxStorageBufferBindingSize;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -371,7 +379,27 @@ void Application::InitializePipeline()
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
     // Describe pipeline layout
-    pipelineDesc.layout = nullptr;
+    // Create a binding layout
+    wgpu::BindGroupLayoutEntry bindingLayout;
+    SetDefaultBindGroupLayout(bindingLayout);
+    bindingLayout.binding               = 0;
+    bindingLayout.visibility            = wgpu::ShaderStage::Vertex;
+    bindingLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
+    bindingLayout.buffer.minBindingSize = 4 * sizeof(float);
+
+    // Create a bind group layout
+    wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc {};
+    bindGroupLayoutDesc.entryCount = 1;
+    bindGroupLayoutDesc.entries    = &bindingLayout;
+    bindGroupLayout                = device.CreateBindGroupLayout(&bindGroupLayoutDesc);
+
+    // Create pipeline layout
+    wgpu::PipelineLayoutDescriptor layoutDesc {};
+    layoutDesc.bindGroupLayoutCount = 1;
+    layoutDesc.bindGroupLayouts     = (wgpu::BindGroupLayout*)&bindGroupLayout;
+    layout                          = device.CreatePipelineLayout(&layoutDesc);
+
+    pipelineDesc.layout = layout;
 
     pipeline = device.CreateRenderPipeline(&pipelineDesc);
 }
@@ -409,6 +437,32 @@ void Application::InitializeBuffers()
     indexBuffer      = device.CreateBuffer(&bufferDesc);
 
     queue.WriteBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
+
+    // Create uniform buffer
+    bufferDesc.size             = 4 * sizeof(float);  // 3 floats are for alignment
+    bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
+    bufferDesc.mappedAtCreation = false;
+    uniformBuffer               = device.CreateBuffer(&bufferDesc);
+
+    float currentTime = 0.0f;
+    queue.WriteBuffer(uniformBuffer, 0, &currentTime, sizeof(float));
+}
+
+void Application::InitializeBindGroups()
+{
+    // Create a binding
+    wgpu::BindGroupEntry binding {};
+    binding.binding = 0;
+    binding.buffer  = uniformBuffer;
+    binding.offset  = 0;
+    binding.size    = 4 * sizeof(float);
+
+    // A bind group contains one or multiple bindings
+    wgpu::BindGroupDescriptor bindGroupDesc {};
+    bindGroupDesc.layout     = bindGroupLayout;
+    bindGroupDesc.entryCount = 1;
+    bindGroupDesc.entries    = &binding;
+    bindGroup                = device.CreateBindGroup(&bindGroupDesc);
 }
 
 wgpu::TextureView Application::GetNextSurfaceTextureView()
@@ -439,6 +493,45 @@ wgpu::TextureView Application::GetNextSurfaceTextureView()
     wgpu::TextureView targetView = surfaceTexture.texture.CreateView(&viewDescriptor);
 
     return targetView;
+}
+
+void Application::SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingLayout)
+{
+#ifdef __EMSCRIPTEN__
+    bindingLayout.buffer.nextInChain      = nullptr;
+    bindingLayout.buffer.type             = wgpu::BufferBindingType::Undefined;
+    bindingLayout.buffer.hasDynamicOffset = false;
+
+    bindingLayout.sampler.nextInChain = nullptr;
+    bindingLayout.sampler.type        = wgpu::SamplerBindingType::Undefined;
+
+    bindingLayout.storageTexture.nextInChain   = nullptr;
+    bindingLayout.storageTexture.access        = wgpu::StorageTextureAccess::Undefined;
+    bindingLayout.storageTexture.format        = wgpu::TextureFormat::Undefined;
+    bindingLayout.storageTexture.viewDimension = wgpu::TextureViewDimension::Undefined;
+
+    bindingLayout.texture.nextInChain   = nullptr;
+    bindingLayout.texture.multisampled  = false;
+    bindingLayout.texture.sampleType    = wgpu::TextureSampleType::Undefined;
+    bindingLayout.texture.viewDimension = wgpu::TextureViewDimension::Undefined;
+#else
+    bindingLayout.buffer.nextInChain      = nullptr;
+    bindingLayout.buffer.type             = wgpu::BufferBindingType::BindingNotUsed;
+    bindingLayout.buffer.hasDynamicOffset = false;
+
+    bindingLayout.sampler.nextInChain = nullptr;
+    bindingLayout.sampler.type        = wgpu::SamplerBindingType::BindingNotUsed;
+
+    bindingLayout.storageTexture.nextInChain   = nullptr;
+    bindingLayout.storageTexture.access        = wgpu::StorageTextureAccess::BindingNotUsed;
+    bindingLayout.storageTexture.format        = wgpu::TextureFormat::Undefined;
+    bindingLayout.storageTexture.viewDimension = wgpu::TextureViewDimension::Undefined;
+
+    bindingLayout.texture.nextInChain   = nullptr;
+    bindingLayout.texture.multisampled  = false;
+    bindingLayout.texture.sampleType    = wgpu::TextureSampleType::BindingNotUsed;
+    bindingLayout.texture.viewDimension = wgpu::TextureViewDimension::Undefined;
+#endif
 }
 
 void Application::SetDefaultLimits(wgpu::Limits& limits) const
