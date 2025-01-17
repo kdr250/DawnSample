@@ -201,8 +201,8 @@ void Application::MainLoop()
     tickCount   = SDL_GetTicks64();
 
     // Update uniform buffer
-    float t = tickCount / 1000.0f;
-    queue.WriteBuffer(uniformBuffer, 0, &t, sizeof(float));
+    float time = tickCount / 1000.0f;
+    queue.WriteBuffer(uniformBuffer, offsetof(MyUniforms, time), &time, sizeof(float));
 
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
@@ -383,9 +383,9 @@ void Application::InitializePipeline()
     wgpu::BindGroupLayoutEntry bindingLayout;
     SetDefaultBindGroupLayout(bindingLayout);
     bindingLayout.binding               = 0;
-    bindingLayout.visibility            = wgpu::ShaderStage::Vertex;
+    bindingLayout.visibility            = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
     bindingLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
-    bindingLayout.buffer.minBindingSize = 4 * sizeof(float);
+    bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
     // Create a bind group layout
     wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc {};
@@ -439,13 +439,16 @@ void Application::InitializeBuffers()
     queue.WriteBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
     // Create uniform buffer
-    bufferDesc.size             = 4 * sizeof(float);  // 3 floats are for alignment
+    bufferDesc.size             = sizeof(MyUniforms);
     bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
     bufferDesc.mappedAtCreation = false;
     uniformBuffer               = device.CreateBuffer(&bufferDesc);
 
-    float currentTime = 0.0f;
-    queue.WriteBuffer(uniformBuffer, 0, &currentTime, sizeof(float));
+    // Upload the initial value of the uniforms
+    MyUniforms uniforms;
+    uniforms.time  = 1.0f;
+    uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
+    queue.WriteBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 }
 
 void Application::InitializeBindGroups()
@@ -455,7 +458,7 @@ void Application::InitializeBindGroups()
     binding.binding = 0;
     binding.buffer  = uniformBuffer;
     binding.offset  = 0;
-    binding.size    = 4 * sizeof(float);
+    binding.size    = sizeof(MyUniforms);
 
     // A bind group contains one or multiple bindings
     wgpu::BindGroupDescriptor bindGroupDesc {};
