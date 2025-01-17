@@ -2,6 +2,8 @@
 
 #include <SDL2/SDL.h>
 #include <webgpu/webgpu_cpp.h>
+#include <array>
+#include <cassert>
 
 class Application
 {
@@ -31,6 +33,15 @@ private:
     wgpu::RequiredLimits GetRequiredLimits(wgpu::Adapter adapter) const;
 
     void SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingLayout);
+
+    struct MyUniforms
+    {
+        std::array<float, 4> color;
+        float time;
+        float _padding[3];
+    };
+
+    static_assert(sizeof(MyUniforms) % 16 == 0);
 
     SDL_Window* window;
     wgpu::Device device;
