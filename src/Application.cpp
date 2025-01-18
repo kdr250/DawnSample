@@ -232,10 +232,22 @@ void Application::MainLoop()
     renderPassColorAttachment.clearValue                      = {0.05, 0.05, 0.05, 1.0};
     renderPassColorAttachment.depthSlice                      = WGPU_DEPTH_SLICE_UNDEFINED;
 
-    renderPassDesc.colorAttachmentCount   = 1;
-    renderPassDesc.colorAttachments       = &renderPassColorAttachment;
-    renderPassDesc.depthStencilAttachment = nullptr;
-    renderPassDesc.timestampWrites        = nullptr;
+    renderPassDesc.colorAttachmentCount = 1;
+    renderPassDesc.colorAttachments     = &renderPassColorAttachment;
+
+    wgpu::RenderPassDepthStencilAttachment depthStencilAttachment;
+    depthStencilAttachment.view              = depthTextureView;
+    depthStencilAttachment.depthClearValue   = 1.0f;
+    depthStencilAttachment.depthLoadOp       = wgpu::LoadOp::Clear;
+    depthStencilAttachment.depthStoreOp      = wgpu::StoreOp::Store;
+    depthStencilAttachment.depthReadOnly     = false;
+    depthStencilAttachment.stencilClearValue = 0;
+    depthStencilAttachment.stencilLoadOp     = wgpu::LoadOp::Undefined;
+    depthStencilAttachment.stencilStoreOp    = wgpu::StoreOp::Undefined;
+    depthStencilAttachment.stencilReadOnly   = true;
+    renderPassDesc.depthStencilAttachment    = &depthStencilAttachment;
+
+    renderPassDesc.timestampWrites = nullptr;
 
     // Create the render pass and end it immediately (we only clear the screen but do not draw anything)
     wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
@@ -291,6 +303,10 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
+
+    requiredLimits.limits.maxTextureDimension1D = 1024;
+    requiredLimits.limits.maxTextureDimension2D = 768;
+    requiredLimits.limits.maxTextureArrayLayers = 1;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -371,7 +387,15 @@ void Application::InitializePipeline()
     pipelineDesc.fragment     = &fragmentState;
 
     // Describe stencil/depth pipeline
-    pipelineDesc.depthStencil = nullptr;
+    wgpu::DepthStencilState depthStencilState;
+    SetDefaultDepthStencilState(depthStencilState);
+    depthStencilState.depthCompare         = wgpu::CompareFunction::Less;
+    depthStencilState.depthWriteEnabled    = true;
+    wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+    depthStencilState.format               = depthTextureFormat;
+    depthStencilState.stencilReadMask      = 0;
+    depthStencilState.stencilWriteMask     = 0;
+    pipelineDesc.depthStencil              = &depthStencilState;
 
     // Describe multi-sampling pipeline
     pipelineDesc.multisample.count                  = 1;
@@ -402,6 +426,31 @@ void Application::InitializePipeline()
     pipelineDesc.layout = layout;
 
     pipeline = device.CreateRenderPipeline(&pipelineDesc);
+
+    // Create the depth texture
+    wgpu::TextureDescriptor depthTextureDesc;
+    depthTextureDesc.dimension       = wgpu::TextureDimension::e2D;
+    depthTextureDesc.format          = depthTextureFormat;
+    depthTextureDesc.mipLevelCount   = 1;
+    depthTextureDesc.sampleCount     = 1;
+    depthTextureDesc.size            = {1024, 768, 1};
+    depthTextureDesc.usage           = wgpu::TextureUsage::RenderAttachment;
+    depthTextureDesc.viewFormatCount = 1;
+    depthTextureDesc.viewFormats     = (wgpu::TextureFormat*)&depthTextureFormat;
+    depthTexture                     = device.CreateTexture(&depthTextureDesc);
+
+    // Create the view of the depth texture manipulated by the rasterizer
+    wgpu::TextureViewDescriptor depthTextureViewDesc;
+    depthTextureViewDesc.nextInChain     = nullptr;
+    depthTextureViewDesc.label           = WebGPUUtils::GenerateString("Depth Texture");
+    depthTextureViewDesc.aspect          = wgpu::TextureAspect::DepthOnly;
+    depthTextureViewDesc.baseArrayLayer  = 0;
+    depthTextureViewDesc.arrayLayerCount = 1;
+    depthTextureViewDesc.baseMipLevel    = 0;
+    depthTextureViewDesc.mipLevelCount   = 1;
+    depthTextureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
+    depthTextureViewDesc.format          = depthTextureFormat;
+    depthTextureView                     = depthTexture.CreateView(&depthTextureViewDesc);
 }
 
 void Application::InitializeBuffers()
@@ -535,6 +584,28 @@ void Application::SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingL
     bindingLayout.texture.sampleType    = wgpu::TextureSampleType::BindingNotUsed;
     bindingLayout.texture.viewDimension = wgpu::TextureViewDimension::Undefined;
 #endif
+}
+
+void Application::SetDefaultStencilFaceState(wgpu::StencilFaceState& stencilFaceState)
+{
+    stencilFaceState.compare     = wgpu::CompareFunction::Always;
+    stencilFaceState.failOp      = wgpu::StencilOperation::Keep;
+    stencilFaceState.depthFailOp = wgpu::StencilOperation::Keep;
+    stencilFaceState.passOp      = wgpu::StencilOperation::Keep;
+}
+
+void Application::SetDefaultDepthStencilState(wgpu::DepthStencilState& depthStencilstate)
+{
+    depthStencilstate.format              = wgpu::TextureFormat::Undefined;
+    depthStencilstate.depthWriteEnabled   = false;
+    depthStencilstate.depthCompare        = wgpu::CompareFunction::Always;
+    depthStencilstate.stencilReadMask     = 0xFFFFFFFF;
+    depthStencilstate.stencilWriteMask    = 0xFFFFFFFF;
+    depthStencilstate.depthBias           = 0;
+    depthStencilstate.depthBiasSlopeScale = 0;
+    depthStencilstate.depthBiasClamp      = 0;
+    SetDefaultStencilFaceState(depthStencilstate.stencilFront);
+    SetDefaultStencilFaceState(depthStencilstate.stencilBack);
 }
 
 void Application::SetDefaultLimits(wgpu::Limits& limits) const
