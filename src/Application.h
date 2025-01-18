@@ -34,6 +34,9 @@ private:
 
     void SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingLayout);
 
+    void SetDefaultStencilFaceState(wgpu::StencilFaceState& stencilFaceState);
+    void SetDefaultDepthStencilState(wgpu::DepthStencilState& depthStencilstate);
+
     struct MyUniforms
     {
         std::array<float, 4> color;
@@ -56,6 +59,8 @@ private:
     wgpu::PipelineLayout layout;
     wgpu::BindGroupLayout bindGroupLayout;
     wgpu::BindGroup bindGroup;
+    wgpu::Texture depthTexture;
+    wgpu::TextureView depthTextureView;
 
     bool isRunning = true;
 
