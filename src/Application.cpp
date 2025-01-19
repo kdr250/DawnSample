@@ -209,21 +209,10 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
-    // Scale the object
-    glm::mat4x4 S = glm::transpose(
-        glm::
-            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
-
-    // Translate the object
-    glm::mat4x4 T1 = glm::transpose(
-        glm::
-            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
-
-    float angle1   = uniforms.time;
-    float c1       = cos(angle1);
-    float s1       = sin(angle1);
-    glm::mat4x4 R1 = glm::transpose(
-        glm::mat4x4(c1, s1, 0.0, 0.0, -s1, c1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+    float angle1         = uniforms.time;  // Rotation
+    auto S               = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
+    auto T1              = glm::translate(glm::mat4x4(1.0), glm::vec3(0.5, 0.0, 0.0));
+    auto R1              = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
     uniforms.modelMatrix = R1 * T1 * S;
 
     queue.WriteBuffer(uniformBuffer,
@@ -521,50 +510,19 @@ void Application::InitializeBuffers()
     uniformBuffer               = device.CreateBuffer(&bufferDesc);
 
     // Upload the initial value of the uniforms
-    // Build transform matrices
-    // Option A: Manually define matrices
-    // Scale the object
-    glm::mat4x4 S = glm::transpose(
-        glm::
-            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
-
-    // Translate the object
-    glm::mat4x4 T1 = glm::transpose(
-        glm::
-            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
-
-    // Translate the view
+    // Option B: Use GLM extensions
+    float angle1 = 2.0f;              // Rotate the object
+    float angle2 = 3.0f * PI / 4.0f;  // Rotate the view point
     glm::vec3 focalPoint(0.0, 0.0, -2.0);
-    glm::mat4x4 T2 = glm::transpose(glm::mat4x4(1.0,
-                                                0.0,
-                                                0.0,
-                                                -focalPoint.x,
-                                                0.0,
-                                                1.0,
-                                                0.0,
-                                                -focalPoint.y,
-                                                0.0,
-                                                0.0,
-                                                1.0,
-                                                -focalPoint.z,
-                                                0.0,
-                                                0.0,
-                                                0.0,
-                                                1.0));
 
-    // Rotate the object
-    float angle1   = 2.0f;  // arbitrary time
-    float c1       = cos(angle1);
-    float s1       = sin(angle1);
-    glm::mat4x4 R1 = glm::transpose(
-        glm::mat4x4(c1, s1, 0.0, 0.0, -s1, c1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+    auto S               = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
+    auto T1              = glm::translate(glm::mat4x4(1.0), glm::vec3(0.5, 0.0, 0.0));
+    auto R1              = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
+    uniforms.modelMatrix = R1 * T1 * S;
 
-    // Rotate the view point
-    float angle2   = 3.0f * PI / 4.0f;
-    float c2       = std::cos(angle2);
-    float s2       = std::sin(angle2);
-    glm::mat4x4 R2 = glm::transpose(
-        glm::mat4x4(1.0, 0.0, 0.0, 0.0, 0.0, c2, s2, 0.0, 0.0, -s2, c2, 0.0, 0.0, 0.0, 0.0, 1.0));
+    auto R2             = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
+    auto T2             = glm::translate(glm::mat4x4(1.0), -focalPoint);
+    uniforms.viewMatrix = T2 * R2;
 
     uniforms.modelMatrix = R1 * T1 * S;
     uniforms.viewMatrix  = T2 * R2;
