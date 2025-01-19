@@ -209,11 +209,12 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
-    float angle1         = uniforms.time;  // Rotation
-    auto S               = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-    auto T1              = glm::translate(glm::mat4x4(1.0), glm::vec3(0.5, 0.0, 0.0));
-    auto R1              = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    uniforms.modelMatrix = R1 * T1 * S;
+    float angle1 = uniforms.time;  // Rotation
+    glm::mat4x4 M(1.0);
+    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
+    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
+    M                    = glm::scale(M, glm::vec3(0.3f));
+    uniforms.modelMatrix = M;
 
     queue.WriteBuffer(uniformBuffer,
                       offsetof(MyUniforms, modelMatrix),
@@ -510,22 +511,21 @@ void Application::InitializeBuffers()
     uniformBuffer               = device.CreateBuffer(&bufferDesc);
 
     // Upload the initial value of the uniforms
-    // Option B: Use GLM extensions
+    // Option C: A different way of using GLM extensions
     float angle1 = 2.0f;              // Rotate the object
     float angle2 = 3.0f * PI / 4.0f;  // Rotate the view point
     glm::vec3 focalPoint(0.0, 0.0, -2.0);
 
-    auto S               = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-    auto T1              = glm::translate(glm::mat4x4(1.0), glm::vec3(0.5, 0.0, 0.0));
-    auto R1              = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    uniforms.modelMatrix = R1 * T1 * S;
+    glm::mat4x4 M(1.0);
+    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
+    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
+    M                    = glm::scale(M, glm::vec3(0.3f));
+    uniforms.modelMatrix = M;
 
-    auto R2             = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
-    auto T2             = glm::translate(glm::mat4x4(1.0), -focalPoint);
-    uniforms.viewMatrix = T2 * R2;
-
-    uniforms.modelMatrix = R1 * T1 * S;
-    uniforms.viewMatrix  = T2 * R2;
+    glm::mat4x4 V(1.0);
+    V                   = glm::translate(V, -focalPoint);
+    V                   = glm::rotate(V, -angle2, glm::vec3(1.0, 0.0, 0.0));
+    uniforms.viewMatrix = V;
 
     float ratio               = 640.0f / 480.0f;
     float focalLength         = 2.0;
