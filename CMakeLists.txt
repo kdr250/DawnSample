@@ -25,6 +25,8 @@ else()
     find_package(SDL2 CONFIG REQUIRED)
 endif()
 
+find_package(glm CONFIG REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 
@@ -52,6 +54,7 @@ if (EMSCRIPTEN)
 
     target_link_libraries(
         main PRIVATE
+        glm::glm
         sdl2webgpu
     )
 
@@ -62,6 +65,7 @@ else()
         dawn::webgpu_dawn
         $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
         $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+        glm::glm
         sdl2webgpu
     )
 

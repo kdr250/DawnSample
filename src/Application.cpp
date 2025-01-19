@@ -12,6 +12,8 @@
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
+constexpr float PI = 3.14159265358979323846f;
+
 bool Application::Initialize()
 {
     // Init SDL
@@ -201,8 +203,23 @@ void Application::MainLoop()
     tickCount   = SDL_GetTicks64();
 
     // Update uniform buffer
-    float time = tickCount / 1000.0f;
-    queue.WriteBuffer(uniformBuffer, offsetof(MyUniforms, time), &time, sizeof(float));
+    uniforms.time = tickCount / 1000.0f;
+    queue.WriteBuffer(uniformBuffer,
+                      offsetof(MyUniforms, time),
+                      &uniforms.time,
+                      sizeof(MyUniforms::time));
+
+    float angle1 = uniforms.time;  // Rotation
+    glm::mat4x4 M(1.0);
+    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
+    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
+    M                    = glm::scale(M, glm::vec3(0.3f));
+    uniforms.modelMatrix = M;
+
+    queue.WriteBuffer(uniformBuffer,
+                      offsetof(MyUniforms, modelMatrix),
+                      &uniforms.modelMatrix,
+                      sizeof(MyUniforms::modelMatrix));
 
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
@@ -297,7 +314,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     requiredLimits.limits.maxBindGroups                   = 1;
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4;
+    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
     requiredLimits.limits.maxInterStageShaderComponents = 3;
 
@@ -494,7 +511,30 @@ void Application::InitializeBuffers()
     uniformBuffer               = device.CreateBuffer(&bufferDesc);
 
     // Upload the initial value of the uniforms
-    MyUniforms uniforms;
+    // Option C: A different way of using GLM extensions
+    float angle1 = 2.0f;              // Rotate the object
+    float angle2 = 3.0f * PI / 4.0f;  // Rotate the view point
+    glm::vec3 focalPoint(0.0, 0.0, -2.0);
+
+    glm::mat4x4 M(1.0);
+    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
+    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
+    M                    = glm::scale(M, glm::vec3(0.3f));
+    uniforms.modelMatrix = M;
+
+    glm::mat4x4 V(1.0);
+    V                   = glm::translate(V, -focalPoint);
+    V                   = glm::rotate(V, -angle2, glm::vec3(1.0, 0.0, 0.0));
+    uniforms.viewMatrix = V;
+
+    float ratio               = 640.0f / 480.0f;
+    float focalLength         = 2.0;
+    float near                = 0.01f;
+    float far                 = 100.0f;
+    float divider             = 1 / (focalLength * (far - near));
+    float fov                 = 2 * glm::atan(1.0f / focalLength);
+    uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
+
     uniforms.time  = 1.0f;
     uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
     queue.WriteBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));

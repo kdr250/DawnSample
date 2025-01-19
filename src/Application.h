@@ -5,6 +5,11 @@
 #include <array>
 #include <cassert>
 
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_LEFT_HANDED
+#include <glm/ext.hpp>
+#include <glm/glm.hpp>
+
 class Application
 {
 public:
@@ -39,7 +44,10 @@ private:
 
     struct MyUniforms
     {
-        std::array<float, 4> color;
+        glm::mat4x4 projectionMatrix;
+        glm::mat4x4 viewMatrix;
+        glm::mat4x4 modelMatrix;
+        glm::vec4 color;
         float time;
         float _padding[3];
     };
@@ -61,6 +69,8 @@ private:
     wgpu::BindGroup bindGroup;
     wgpu::Texture depthTexture;
     wgpu::TextureView depthTextureView;
+
+    MyUniforms uniforms;
 
     bool isRunning = true;
 
