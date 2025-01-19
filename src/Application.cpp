@@ -12,6 +12,8 @@
 #include "WebGPUUtils.h"
 #include "sdl2webgpu.h"
 
+constexpr float PI = 3.14159265358979323846f;
+
 bool Application::Initialize()
 {
     // Init SDL
@@ -201,8 +203,33 @@ void Application::MainLoop()
     tickCount   = SDL_GetTicks64();
 
     // Update uniform buffer
-    float time = tickCount / 1000.0f;
-    queue.WriteBuffer(uniformBuffer, offsetof(MyUniforms, time), &time, sizeof(float));
+    uniforms.time = tickCount / 1000.0f;
+    queue.WriteBuffer(uniformBuffer,
+                      offsetof(MyUniforms, time),
+                      &uniforms.time,
+                      sizeof(MyUniforms::time));
+
+    // Scale the object
+    glm::mat4x4 S = glm::transpose(
+        glm::
+            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Translate the object
+    glm::mat4x4 T1 = glm::transpose(
+        glm::
+            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    float angle1   = uniforms.time;
+    float c1       = cos(angle1);
+    float s1       = sin(angle1);
+    glm::mat4x4 R1 = glm::transpose(
+        glm::mat4x4(c1, s1, 0.0, 0.0, -s1, c1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+    uniforms.modelMatrix = R1 * T1 * S;
+
+    queue.WriteBuffer(uniformBuffer,
+                      offsetof(MyUniforms, modelMatrix),
+                      &uniforms.modelMatrix,
+                      sizeof(MyUniforms::modelMatrix));
 
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
@@ -297,7 +324,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     requiredLimits.limits.maxBindGroups                   = 1;
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4;
+    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
     requiredLimits.limits.maxInterStageShaderComponents = 3;
 
@@ -494,7 +521,76 @@ void Application::InitializeBuffers()
     uniformBuffer               = device.CreateBuffer(&bufferDesc);
 
     // Upload the initial value of the uniforms
-    MyUniforms uniforms;
+    // Build transform matrices
+    // Option A: Manually define matrices
+    // Scale the object
+    glm::mat4x4 S = glm::transpose(
+        glm::
+            mat4x4(0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Translate the object
+    glm::mat4x4 T1 = glm::transpose(
+        glm::
+            mat4x4(1.0, 0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Translate the view
+    glm::vec3 focalPoint(0.0, 0.0, -2.0);
+    glm::mat4x4 T2 = glm::transpose(glm::mat4x4(1.0,
+                                                0.0,
+                                                0.0,
+                                                -focalPoint.x,
+                                                0.0,
+                                                1.0,
+                                                0.0,
+                                                -focalPoint.y,
+                                                0.0,
+                                                0.0,
+                                                1.0,
+                                                -focalPoint.z,
+                                                0.0,
+                                                0.0,
+                                                0.0,
+                                                1.0));
+
+    // Rotate the object
+    float angle1   = 2.0f;  // arbitrary time
+    float c1       = cos(angle1);
+    float s1       = sin(angle1);
+    glm::mat4x4 R1 = glm::transpose(
+        glm::mat4x4(c1, s1, 0.0, 0.0, -s1, c1, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    // Rotate the view point
+    float angle2   = 3.0f * PI / 4.0f;
+    float c2       = std::cos(angle2);
+    float s2       = std::sin(angle2);
+    glm::mat4x4 R2 = glm::transpose(
+        glm::mat4x4(1.0, 0.0, 0.0, 0.0, 0.0, c2, s2, 0.0, 0.0, -s2, c2, 0.0, 0.0, 0.0, 0.0, 1.0));
+
+    uniforms.modelMatrix = R1 * T1 * S;
+    uniforms.viewMatrix  = T2 * R2;
+
+    float ratio               = 640.0f / 480.0f;
+    float focalLength         = 2.0;
+    float near                = 0.01f;
+    float far                 = 100.0f;
+    float divider             = 1 / (focalLength * (far - near));
+    uniforms.projectionMatrix = glm::transpose(glm::mat4x4(1.0,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           ratio,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           0.0,
+                                                           far * divider,
+                                                           -far * near * divider,
+                                                           0.0,
+                                                           0.0,
+                                                           1.0 / focalLength,
+                                                           0.0));
+
     uniforms.time  = 1.0f;
     uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
     queue.WriteBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
