@@ -532,22 +532,8 @@ void Application::InitializeBuffers()
     float near                = 0.01f;
     float far                 = 100.0f;
     float divider             = 1 / (focalLength * (far - near));
-    uniforms.projectionMatrix = glm::transpose(glm::mat4x4(1.0,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           ratio,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           0.0,
-                                                           far * divider,
-                                                           -far * near * divider,
-                                                           0.0,
-                                                           0.0,
-                                                           1.0 / focalLength,
-                                                           0.0));
+    float fov                 = 2 * glm::atan(1.0f / focalLength);
+    uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
 
     uniforms.time  = 1.0f;
     uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
