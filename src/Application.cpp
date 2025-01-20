@@ -307,16 +307,16 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     wgpu::RequiredLimits requiredLimits {};
     SetDefaultLimits(requiredLimits.limits);
 
-    requiredLimits.limits.maxVertexAttributes        = 2;
+    requiredLimits.limits.maxVertexAttributes        = 3;
     requiredLimits.limits.maxVertexBuffers           = 2;
-    requiredLimits.limits.maxBufferSize              = 15 * 5 * sizeof(float);
-    requiredLimits.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
+    requiredLimits.limits.maxBufferSize              = 16 * sizeof(VertexAttributes);
+    requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
     requiredLimits.limits.maxBindGroups                   = 1;
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
     requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
-    requiredLimits.limits.maxInterStageShaderComponents = 3;
+    requiredLimits.limits.maxInterStageShaderComponents = 6;
 
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
@@ -351,17 +351,20 @@ void Application::InitializePipeline()
 
     // Describe vertex pipeline
     wgpu::VertexBufferLayout vertexBufferLayout {};
-    std::vector<wgpu::VertexAttribute> vertexAttribs(2);
+    std::vector<wgpu::VertexAttribute> vertexAttribs(3);
     vertexAttribs[0].shaderLocation = 0;  // @location(0) position attribute
     vertexAttribs[0].format         = wgpu::VertexFormat::Float32x3;
-    vertexAttribs[0].offset         = 0;
-    vertexAttribs[1].shaderLocation = 1;  // @location(1) color attribute
+    vertexAttribs[0].offset         = offsetof(VertexAttributes, position);
+    vertexAttribs[1].shaderLocation = 1;  // @location(1) normal attribute
     vertexAttribs[1].format         = wgpu::VertexFormat::Float32x3;
-    vertexAttribs[1].offset         = 3 * sizeof(float);
+    vertexAttribs[1].offset         = offsetof(VertexAttributes, normal);
+    vertexAttribs[2].shaderLocation = 2;  // @location(2) color attribute
+    vertexAttribs[2].format         = wgpu::VertexFormat::Float32x3;
+    vertexAttribs[2].offset         = offsetof(VertexAttributes, color);
 
     vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
     vertexBufferLayout.attributes     = vertexAttribs.data();
-    vertexBufferLayout.arrayStride    = 6 * sizeof(float);
+    vertexBufferLayout.arrayStride    = sizeof(VertexAttributes);
     vertexBufferLayout.stepMode       = wgpu::VertexStepMode::Vertex;
 
     pipelineDesc.vertex.bufferCount = 1;
@@ -476,7 +479,7 @@ void Application::InitializeBuffers()
     std::vector<float> pointData;
     std::vector<uint16_t> indexData;
 
-    bool success = ResourceManager::LoadGeometry("resources/pyramid.txt", pointData, indexData, 3);
+    bool success = ResourceManager::LoadGeometry("resources/pyramid.txt", pointData, indexData, 6);
 
     if (!success)
     {

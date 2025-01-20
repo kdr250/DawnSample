@@ -54,6 +54,13 @@ private:
 
     static_assert(sizeof(MyUniforms) % 16 == 0);
 
+    struct VertexAttributes
+    {
+        glm::vec3 position;
+        glm::vec3 normal;
+        glm::vec3 color;
+    };
+
     SDL_Window* window;
     wgpu::Device device;
     wgpu::Queue queue;
