@@ -22,6 +22,7 @@ struct MyUniforms {
 
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 @group(0) @binding(1) var gradientTexture: texture_2d<f32>;
+@group(0) @binding(2) var textureSampler: sampler;
 
 const PI = 3.14159265359;
 
@@ -31,13 +32,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
     out.color = in.color;
     out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
-    out.uv = in.uv;
+    out.uv = in.uv * 6.0;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let texelCoords = vec2i(in.uv * vec2f(textureDimensions(gradientTexture)));
-    let color = textureLoad(gradientTexture, texelCoords, 0).rgb;
+    let color = textureSample(gradientTexture, textureSampler, in.uv).rgb;
     return vec4f(color, 1.0);
 }
