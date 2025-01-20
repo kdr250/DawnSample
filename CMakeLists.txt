@@ -27,6 +27,7 @@ endif()
 
 find_package(glm CONFIG REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
@@ -60,6 +61,8 @@ if (EMSCRIPTEN)
         sdl2webgpu
     )
 
+    target_include_directories(main PRIVATE ${Stb_INCLUDE_DIR})
+
 else()
 
     target_link_libraries(
@@ -71,6 +74,8 @@ else()
         tinyobjloader::tinyobjloader
         sdl2webgpu
     )
+
+    target_include_directories(main PRIVATE ${Stb_INCLUDE_DIR})
 
     add_custom_command(
         TARGET main POST_BUILD

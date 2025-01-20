@@ -209,14 +209,6 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
-    float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
-    uniforms.viewMatrix =
-        glm::lookAt(glm::vec3(-0.5f, -1.5f, viewZ + 0.25f), glm::vec3(0.0f), glm::vec3(0, 0, 1));
-    queue.WriteBuffer(uniformBuffer,
-                      offsetof(MyUniforms, viewMatrix),
-                      &uniforms.viewMatrix,
-                      sizeof(MyUniforms::viewMatrix));
-
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
@@ -304,7 +296,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     requiredLimits.limits.maxVertexAttributes        = 4;
     requiredLimits.limits.maxVertexBuffers           = 2;
-    requiredLimits.limits.maxBufferSize              = 10000 * sizeof(VertexAttributes);
+    requiredLimits.limits.maxBufferSize              = 150000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
     requiredLimits.limits.maxBindGroups                   = 1;
@@ -316,8 +308,8 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
 
-    requiredLimits.limits.maxTextureDimension1D = 1024;
-    requiredLimits.limits.maxTextureDimension2D = 768;
+    requiredLimits.limits.maxTextureDimension1D = 2048;
+    requiredLimits.limits.maxTextureDimension2D = 2048;
     requiredLimits.limits.maxTextureArrayLayers = 1;
 
     requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
@@ -485,28 +477,6 @@ void Application::InitializePipeline()
     depthTextureViewDesc.format          = depthTextureFormat;
     depthTextureView                     = depthTexture.CreateView(&depthTextureViewDesc);
 
-    // Create the color texture
-    wgpu::TextureDescriptor textureDesc;
-    textureDesc.dimension       = wgpu::TextureDimension::e2D;
-    textureDesc.size            = {256, 256, 1};
-    textureDesc.mipLevelCount   = 8;
-    textureDesc.sampleCount     = 1;
-    textureDesc.format          = wgpu::TextureFormat::RGBA8Unorm;
-    textureDesc.usage           = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
-    textureDesc.viewFormatCount = 0;
-    textureDesc.viewFormats     = nullptr;
-    texture                     = device.CreateTexture(&textureDesc);
-
-    wgpu::TextureViewDescriptor textureViewDesc;
-    textureViewDesc.aspect          = wgpu::TextureAspect::All;
-    textureViewDesc.baseArrayLayer  = 0;
-    textureViewDesc.arrayLayerCount = 1;
-    textureViewDesc.baseMipLevel    = 0;
-    textureViewDesc.mipLevelCount   = textureDesc.mipLevelCount;
-    textureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
-    textureViewDesc.format          = textureDesc.format;
-    textureView                     = texture.CreateView(&textureViewDesc);
-
     // Create a sampler
     wgpu::SamplerDescriptor samplerDesc;
     samplerDesc.addressModeU  = wgpu::AddressMode::Repeat;
@@ -521,69 +491,13 @@ void Application::InitializePipeline()
     samplerDesc.maxAnisotropy = 1;
     sampler                   = device.CreateSampler(&samplerDesc);
 
-    // Create and upload texture data, one mip level at a time
-    wgpu::ImageCopyTexture destination;
-    destination.texture = texture;
-    destination.origin  = {0, 0, 0};
-    destination.aspect  = wgpu::TextureAspect::All;
-
-    wgpu::TextureDataLayout source;
-    source.offset = 0;
-
-    wgpu::Extent3D mipLevelSize = textureDesc.size;
-    std::vector<uint8_t> previousLevelPixels;
-    for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level)
+    // Create a texture
+    texture =
+        ResourceManager::LoadTexture("resources/fourareen2K_albedo.jpg", device, &textureView);
+    if (!texture)
     {
-        // Create image data
-        std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
-        for (uint32_t i = 0; i < mipLevelSize.width; ++i)
-        {
-            for (uint32_t j = 0; j < mipLevelSize.height; ++j)
-            {
-                uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
-                if (level == 0)
-                {
-                    p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0;  // r
-                    p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0;       // g
-                    p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0;       // b
-                }
-                else
-                {
-                    // Get the corresponding 4 pixels from the previous level
-                    uint8_t* p00 = &previousLevelPixels[4
-                                                        * ((2 * j + 0) * (2 * mipLevelSize.width)
-                                                           + (2 * i + 0))];
-                    uint8_t* p01 = &previousLevelPixels[4
-                                                        * ((2 * j + 0) * (2 * mipLevelSize.width)
-                                                           + (2 * i + 1))];
-                    uint8_t* p10 = &previousLevelPixels[4
-                                                        * ((2 * j + 1) * (2 * mipLevelSize.width)
-                                                           + (2 * i + 0))];
-                    uint8_t* p11 = &previousLevelPixels[4
-                                                        * ((2 * j + 1) * (2 * mipLevelSize.width)
-                                                           + (2 * i + 1))];
-                    // Average
-                    p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
-                    p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
-                    p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
-                }
-                p[3] = 255;  // a
-            }
-        }
-
-        // Change this to the current level
-        destination.mipLevel = level;
-
-        // Compute from the mip level size
-        source.bytesPerRow  = 4 * mipLevelSize.width;
-        source.rowsPerImage = mipLevelSize.height;
-
-        queue.WriteTexture(&destination, pixels.data(), pixels.size(), &source, &mipLevelSize);
-
-        // The size of the next mip level:
-        mipLevelSize.width /= 2;
-        mipLevelSize.height /= 2;
-        previousLevelPixels = std::move(pixels);
+        SDL_Log("Could not load texture!");
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -592,7 +506,7 @@ void Application::InitializeBuffers()
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/fourareen.obj", vertexData);
 
     if (!success)
     {
