@@ -209,12 +209,11 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
-    float angle1 = uniforms.time;  // Rotation
-    glm::mat4x4 M(1.0);
-    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
-    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
-    M                    = glm::scale(M, glm::vec3(0.3f));
-    uniforms.modelMatrix = M;
+    float angle1         = uniforms.time;  // Rotation
+    glm::mat4x4 S        = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
+    glm::mat4x4 T1       = glm::mat4x4(1.0);
+    glm::mat4x4 R1       = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
+    uniforms.modelMatrix = R1 * T1 * S;
 
     queue.WriteBuffer(uniformBuffer,
                       offsetof(MyUniforms, modelMatrix),
@@ -272,9 +271,8 @@ void Application::MainLoop()
     // set pipeline to renderpass and draw
     renderPass.SetPipeline(pipeline);
     renderPass.SetVertexBuffer(0, pointBuffer, 0, pointBuffer.GetSize());
-    renderPass.SetIndexBuffer(indexBuffer, wgpu::IndexFormat::Uint16, 0, indexBuffer.GetSize());
     renderPass.SetBindGroup(0, bindGroup, 0, nullptr);
-    renderPass.DrawIndexed(indexCount, 1, 0, 0, 0);
+    renderPass.Draw(indexCount, 1, 0, 0);
     renderPass.End();
 
     // Finally encode and submit the render pass
@@ -309,7 +307,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     requiredLimits.limits.maxVertexAttributes        = 3;
     requiredLimits.limits.maxVertexBuffers           = 2;
-    requiredLimits.limits.maxBufferSize              = 16 * sizeof(VertexAttributes);
+    requiredLimits.limits.maxBufferSize              = 10000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
     requiredLimits.limits.maxBindGroups                   = 1;
@@ -475,11 +473,10 @@ void Application::InitializePipeline()
 
 void Application::InitializeBuffers()
 {
-    // Define data vectors
-    std::vector<float> pointData;
-    std::vector<uint16_t> indexData;
+    // Load mesh data from OBJ file
+    std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometry("resources/pyramid.txt", pointData, indexData, 6);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/mammoth.obj", vertexData);
 
     if (!success)
     {
@@ -487,25 +484,17 @@ void Application::InitializeBuffers()
         exit(EXIT_FAILURE);
     }
 
-    indexCount = static_cast<uint32_t>(indexData.size());
-
     // Create vertex buffer
     wgpu::BufferDescriptor bufferDesc {};
     bufferDesc.nextInChain      = nullptr;
-    bufferDesc.size             = pointData.size() * sizeof(float);
+    bufferDesc.size             = vertexData.size() * sizeof(VertexAttributes);
     bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Vertex;
     bufferDesc.mappedAtCreation = false;
     pointBuffer                 = device.CreateBuffer(&bufferDesc);
 
-    queue.WriteBuffer(pointBuffer, 0, pointData.data(), bufferDesc.size);
+    queue.WriteBuffer(pointBuffer, 0, vertexData.data(), bufferDesc.size);
 
-    // Create index buffer
-    bufferDesc.size  = indexData.size() * sizeof(uint16_t);
-    bufferDesc.size  = (bufferDesc.size + 3) & ~3;  // round up to the next multiple of 4
-    bufferDesc.usage = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Index;
-    indexBuffer      = device.CreateBuffer(&bufferDesc);
-
-    queue.WriteBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
+    indexCount = static_cast<int>(vertexData.size());
 
     // Create uniform buffer
     bufferDesc.size             = sizeof(MyUniforms);
@@ -517,18 +506,16 @@ void Application::InitializeBuffers()
     // Option C: A different way of using GLM extensions
     float angle1 = 2.0f;              // Rotate the object
     float angle2 = 3.0f * PI / 4.0f;  // Rotate the view point
-    glm::vec3 focalPoint(0.0, 0.0, -2.0);
+    glm::vec3 focalPoint(0.0, 0.0, -1.0);
 
-    glm::mat4x4 M(1.0);
-    M                    = glm::rotate(M, angle1, glm::vec3(0.0, 0.0, 1.0));
-    M                    = glm::translate(M, glm::vec3(0.5, 0.0, 0.0));
-    M                    = glm::scale(M, glm::vec3(0.3f));
-    uniforms.modelMatrix = M;
+    glm::mat4x4 S        = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
+    glm::mat4x4 T1       = glm::mat4x4(1.0);
+    glm::mat4x4 R1       = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
+    uniforms.modelMatrix = R1 * T1 * S;
 
-    glm::mat4x4 V(1.0);
-    V                   = glm::translate(V, -focalPoint);
-    V                   = glm::rotate(V, -angle2, glm::vec3(1.0, 0.0, 0.0));
-    uniforms.viewMatrix = V;
+    glm::mat4x4 R2      = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
+    glm::mat4x4 T2      = glm::translate(glm::mat4x4(1.0), -focalPoint);
+    uniforms.viewMatrix = T2 * R2;
 
     float ratio               = 640.0f / 480.0f;
     float focalLength         = 2.0;

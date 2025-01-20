@@ -10,6 +10,13 @@
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
 
+struct VertexAttributes
+{
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec3 color;
+};
+
 class Application
 {
 public:
@@ -54,13 +61,6 @@ private:
 
     static_assert(sizeof(MyUniforms) % 16 == 0);
 
-    struct VertexAttributes
-    {
-        glm::vec3 position;
-        glm::vec3 normal;
-        glm::vec3 color;
-    };
-
     SDL_Window* window;
     wgpu::Device device;
     wgpu::Queue queue;
@@ -68,7 +68,6 @@ private:
     wgpu::RenderPipeline pipeline;
     wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
     wgpu::Buffer pointBuffer;
-    wgpu::Buffer indexBuffer;
     uint32_t indexCount;
     wgpu::Buffer uniformBuffer;
     wgpu::PipelineLayout layout;
