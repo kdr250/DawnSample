@@ -209,14 +209,6 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
-    float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
-    uniforms.viewMatrix =
-        glm::lookAt(glm::vec3(-0.5f, -1.5f, viewZ + 0.25f), glm::vec3(0.0f), glm::vec3(0, 0, 1));
-    queue.WriteBuffer(uniformBuffer,
-                      offsetof(MyUniforms, viewMatrix),
-                      &uniforms.viewMatrix,
-                      sizeof(MyUniforms::viewMatrix));
-
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
@@ -304,7 +296,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     requiredLimits.limits.maxVertexAttributes        = 4;
     requiredLimits.limits.maxVertexBuffers           = 2;
-    requiredLimits.limits.maxBufferSize              = 10000 * sizeof(VertexAttributes);
+    requiredLimits.limits.maxBufferSize              = 150000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
     requiredLimits.limits.maxBindGroups                   = 1;
@@ -500,7 +492,8 @@ void Application::InitializePipeline()
     sampler                   = device.CreateSampler(&samplerDesc);
 
     // Create a texture
-    texture = ResourceManager::LoadTexture("resources/texture.jpg", device, &textureView);
+    texture =
+        ResourceManager::LoadTexture("resources/fourareen2K_albedo.jpg", device, &textureView);
     if (!texture)
     {
         SDL_Log("Could not load texture!");
@@ -513,7 +506,7 @@ void Application::InitializeBuffers()
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/fourareen.obj", vertexData);
 
     if (!success)
     {
