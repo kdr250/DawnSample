@@ -77,7 +77,7 @@ private:
     wgpu::Texture depthTexture;
     wgpu::TextureView depthTextureView;
     wgpu::Texture texture;
-    wgpu::TextureView textureView;
+    wgpu::TextureView textureView = nullptr;
     wgpu::Sampler sampler;
 
     MyUniforms uniforms;
