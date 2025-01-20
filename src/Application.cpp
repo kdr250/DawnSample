@@ -489,7 +489,7 @@ void Application::InitializePipeline()
     wgpu::TextureDescriptor textureDesc;
     textureDesc.dimension       = wgpu::TextureDimension::e2D;
     textureDesc.size            = {256, 256, 1};
-    textureDesc.mipLevelCount   = 1;
+    textureDesc.mipLevelCount   = 8;
     textureDesc.sampleCount     = 1;
     textureDesc.format          = wgpu::TextureFormat::RGBA8Unorm;
     textureDesc.usage           = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
@@ -502,7 +502,7 @@ void Application::InitializePipeline()
     textureViewDesc.baseArrayLayer  = 0;
     textureViewDesc.arrayLayerCount = 1;
     textureViewDesc.baseMipLevel    = 0;
-    textureViewDesc.mipLevelCount   = 1;
+    textureViewDesc.mipLevelCount   = textureDesc.mipLevelCount;
     textureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
     textureViewDesc.format          = textureDesc.format;
     textureView                     = texture.CreateView(&textureViewDesc);
@@ -514,8 +514,9 @@ void Application::InitializePipeline()
     samplerDesc.addressModeW  = wgpu::AddressMode::ClampToEdge;
     samplerDesc.magFilter     = wgpu::FilterMode::Linear;
     samplerDesc.minFilter     = wgpu::FilterMode::Linear;
+    samplerDesc.mipmapFilter  = wgpu::MipmapFilterMode::Linear;
     samplerDesc.lodMinClamp   = 0.0f;
-    samplerDesc.lodMaxClamp   = 1.0f;
+    samplerDesc.lodMaxClamp   = 8.0f;
     samplerDesc.compare       = wgpu::CompareFunction::Undefined;
     samplerDesc.maxAnisotropy = 1;
     sampler                   = device.CreateSampler(&samplerDesc);
