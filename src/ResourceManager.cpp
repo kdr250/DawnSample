@@ -3,6 +3,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+#include "Application.h"
 #include "WebGPUUtils.h"
 
 bool ResourceManager::LoadGeometry(const std::filesystem::path& path,
@@ -73,6 +78,67 @@ bool ResourceManager::LoadGeometry(const std::filesystem::path& path,
             }
         }
     }
+    return true;
+}
+
+bool ResourceManager::LoadGeometryFromObj(const std::filesystem::path& path,
+                                          std::vector<VertexAttributes>& vertexData)
+{
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+
+    std::string warn;
+    std::string err;
+
+    bool result =
+        tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str());
+
+    if (!warn.empty())
+    {
+        SDL_Log("%s", warn.c_str());
+    }
+    if (!err.empty())
+    {
+        SDL_Log("%s", err.c_str());
+    }
+
+    if (!result)
+    {
+        return false;
+    }
+
+    // Filling in vertexData
+    vertexData.clear();
+    for (const auto& shape : shapes)
+    {
+        size_t offset = vertexData.size();
+        vertexData.resize(offset + shape.mesh.indices.size());
+
+        for (size_t i = 0; i < shape.mesh.indices.size(); ++i)
+        {
+            const tinyobj::index_t& index = shape.mesh.indices[i];
+
+            vertexData[offset + i].position = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                -attrib.vertices[3 * index.vertex_index + 2],  // Add a minus to avoid mirroring
+                attrib.vertices[3 * index.vertex_index + 1],
+            };
+
+            vertexData[offset + i].normal = {
+                attrib.normals[3 * index.normal_index + 0],
+                -attrib.normals[3 * index.normal_index + 2],
+                attrib.normals[3 * index.normal_index + 1],
+            };
+
+            vertexData[offset + i].color = {
+                attrib.colors[3 * index.vertex_index + 0],
+                attrib.colors[3 * index.vertex_index + 1],
+                attrib.colors[3 * index.vertex_index + 2],
+            };
+        }
+    }
+
     return true;
 }
 

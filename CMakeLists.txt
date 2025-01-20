@@ -26,6 +26,7 @@ else()
 endif()
 
 find_package(glm CONFIG REQUIRED)
+find_package(tinyobjloader CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
@@ -55,6 +56,7 @@ if (EMSCRIPTEN)
     target_link_libraries(
         main PRIVATE
         glm::glm
+        tinyobjloader::tinyobjloader
         sdl2webgpu
     )
 
@@ -66,6 +68,7 @@ else()
         $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
         $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
         glm::glm
+        tinyobjloader::tinyobjloader
         sdl2webgpu
     )
 
