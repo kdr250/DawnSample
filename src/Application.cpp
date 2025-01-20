@@ -313,6 +313,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxTextureArrayLayers = 1;
 
     requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
+    requiredLimits.limits.maxSamplersPerShaderStage        = 1;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -416,7 +417,7 @@ void Application::InitializePipeline()
 
     // Describe pipeline layout
     // Create a binding layout
-    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(2);
+    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(3);
     wgpu::BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
     SetDefaultBindGroupLayout(bindingLayout);
     bindingLayout.binding               = 0;
@@ -425,10 +426,15 @@ void Application::InitializePipeline()
     bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
     wgpu::BindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
     SetDefaultBindGroupLayout(textureBindingLayout);
-    textureBindingLayout.binding               = 1;
-    textureBindingLayout.visibility            = wgpu::ShaderStage::Fragment;
-    textureBindingLayout.texture.sampleType    = wgpu::TextureSampleType::Float;
-    textureBindingLayout.texture.viewDimension = wgpu::TextureViewDimension::e2D;
+    textureBindingLayout.binding                     = 1;
+    textureBindingLayout.visibility                  = wgpu::ShaderStage::Fragment;
+    textureBindingLayout.texture.sampleType          = wgpu::TextureSampleType::Float;
+    textureBindingLayout.texture.viewDimension       = wgpu::TextureViewDimension::e2D;
+    wgpu::BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
+    SetDefaultBindGroupLayout(samplerBindingLayout);
+    samplerBindingLayout.binding      = 2;
+    samplerBindingLayout.visibility   = wgpu::ShaderStage::Fragment;
+    samplerBindingLayout.sampler.type = wgpu::SamplerBindingType::Filtering;
 
     // Create a bind group layout
     wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc {};
@@ -492,6 +498,19 @@ void Application::InitializePipeline()
     textureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
     textureViewDesc.format          = textureDesc.format;
     textureView                     = texture.CreateView(&textureViewDesc);
+
+    // Create a sampler
+    wgpu::SamplerDescriptor samplerDesc;
+    samplerDesc.addressModeU  = wgpu::AddressMode::ClampToEdge;
+    samplerDesc.addressModeV  = wgpu::AddressMode::ClampToEdge;
+    samplerDesc.addressModeW  = wgpu::AddressMode::ClampToEdge;
+    samplerDesc.magFilter     = wgpu::FilterMode::Linear;
+    samplerDesc.minFilter     = wgpu::FilterMode::Linear;
+    samplerDesc.lodMinClamp   = 0.0f;
+    samplerDesc.lodMaxClamp   = 1.0f;
+    samplerDesc.compare       = wgpu::CompareFunction::Undefined;
+    samplerDesc.maxAnisotropy = 1;
+    sampler                   = device.CreateSampler(&samplerDesc);
 
     // Create image data
     std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
@@ -565,7 +584,7 @@ void Application::InitializeBuffers()
 void Application::InitializeBindGroups()
 {
     // Create a binding
-    std::vector<wgpu::BindGroupEntry> bindings(2);
+    std::vector<wgpu::BindGroupEntry> bindings(3);
     bindings[0].binding = 0;
     bindings[0].buffer  = uniformBuffer;
     bindings[0].offset  = 0;
@@ -573,6 +592,9 @@ void Application::InitializeBindGroups()
 
     bindings[1].binding     = 1;
     bindings[1].textureView = textureView;
+
+    bindings[2].binding = 2;
+    bindings[2].sampler = sampler;
 
     // A bind group contains one or multiple bindings
     wgpu::BindGroupDescriptor bindGroupDesc {};
