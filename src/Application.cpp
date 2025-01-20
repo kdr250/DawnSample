@@ -209,6 +209,14 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
+    float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
+    uniforms.viewMatrix =
+        glm::lookAt(glm::vec3(-0.5f, -1.5f, viewZ + 0.25f), glm::vec3(0.0f), glm::vec3(0, 0, 1));
+    queue.WriteBuffer(uniformBuffer,
+                      offsetof(MyUniforms, viewMatrix),
+                      &uniforms.viewMatrix,
+                      sizeof(MyUniforms::viewMatrix));
+
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
@@ -501,8 +509,8 @@ void Application::InitializePipeline()
 
     // Create a sampler
     wgpu::SamplerDescriptor samplerDesc;
-    samplerDesc.addressModeU  = wgpu::AddressMode::ClampToEdge;
-    samplerDesc.addressModeV  = wgpu::AddressMode::ClampToEdge;
+    samplerDesc.addressModeU  = wgpu::AddressMode::Repeat;
+    samplerDesc.addressModeV  = wgpu::AddressMode::Repeat;
     samplerDesc.addressModeW  = wgpu::AddressMode::ClampToEdge;
     samplerDesc.magFilter     = wgpu::FilterMode::Linear;
     samplerDesc.minFilter     = wgpu::FilterMode::Linear;
@@ -545,7 +553,7 @@ void Application::InitializeBuffers()
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometryFromObj("resources/cube.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
 
     if (!success)
     {
