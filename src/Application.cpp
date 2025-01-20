@@ -209,17 +209,6 @@ void Application::MainLoop()
                       &uniforms.time,
                       sizeof(MyUniforms::time));
 
-    float angle1         = uniforms.time;  // Rotation
-    glm::mat4x4 S        = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-    glm::mat4x4 T1       = glm::mat4x4(1.0);
-    glm::mat4x4 R1       = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    uniforms.modelMatrix = R1 * T1 * S;
-
-    queue.WriteBuffer(uniformBuffer,
-                      offsetof(MyUniforms, modelMatrix),
-                      &uniforms.modelMatrix,
-                      sizeof(MyUniforms::modelMatrix));
-
     // Get the next target texture view
     wgpu::TextureView targetView = GetNextSurfaceTextureView();
     if (!targetView)
@@ -323,6 +312,8 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxTextureDimension2D = 768;
     requiredLimits.limits.maxTextureArrayLayers = 1;
 
+    requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
+
     requiredLimits.limits.minUniformBufferOffsetAlignment =
         supportedLimits.limits.minUniformBufferOffsetAlignment;
     requiredLimits.limits.minStorageBufferOffsetAlignment =
@@ -422,17 +413,24 @@ void Application::InitializePipeline()
 
     // Describe pipeline layout
     // Create a binding layout
-    wgpu::BindGroupLayoutEntry bindingLayout;
+    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(2);
+    wgpu::BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
     SetDefaultBindGroupLayout(bindingLayout);
     bindingLayout.binding               = 0;
     bindingLayout.visibility            = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
     bindingLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
     bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+    wgpu::BindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
+    SetDefaultBindGroupLayout(textureBindingLayout);
+    textureBindingLayout.binding               = 1;
+    textureBindingLayout.visibility            = wgpu::ShaderStage::Fragment;
+    textureBindingLayout.texture.sampleType    = wgpu::TextureSampleType::Float;
+    textureBindingLayout.texture.viewDimension = wgpu::TextureViewDimension::e2D;
 
     // Create a bind group layout
     wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc {};
-    bindGroupLayoutDesc.entryCount = 1;
-    bindGroupLayoutDesc.entries    = &bindingLayout;
+    bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindingLayoutEntries.size());
+    bindGroupLayoutDesc.entries    = bindingLayoutEntries.data();
     bindGroupLayout                = device.CreateBindGroupLayout(&bindGroupLayoutDesc);
 
     // Create pipeline layout
@@ -469,6 +467,55 @@ void Application::InitializePipeline()
     depthTextureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
     depthTextureViewDesc.format          = depthTextureFormat;
     depthTextureView                     = depthTexture.CreateView(&depthTextureViewDesc);
+
+    // Create the color texture
+    wgpu::TextureDescriptor textureDesc;
+    textureDesc.dimension       = wgpu::TextureDimension::e2D;
+    textureDesc.size            = {256, 256, 1};
+    textureDesc.mipLevelCount   = 1;
+    textureDesc.sampleCount     = 1;
+    textureDesc.format          = wgpu::TextureFormat::RGBA8Unorm;
+    textureDesc.usage           = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+    textureDesc.viewFormatCount = 0;
+    textureDesc.viewFormats     = nullptr;
+    texture                     = device.CreateTexture(&textureDesc);
+
+    wgpu::TextureViewDescriptor textureViewDesc;
+    textureViewDesc.aspect          = wgpu::TextureAspect::All;
+    textureViewDesc.baseArrayLayer  = 0;
+    textureViewDesc.arrayLayerCount = 1;
+    textureViewDesc.baseMipLevel    = 0;
+    textureViewDesc.mipLevelCount   = 1;
+    textureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
+    textureViewDesc.format          = textureDesc.format;
+    textureView                     = texture.CreateView(&textureViewDesc);
+
+    // Create image data
+    std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
+    for (uint32_t i = 0; i < textureDesc.size.width; ++i)
+    {
+        for (uint32_t j = 0; j < textureDesc.size.height; ++j)
+        {
+            uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
+            p[0]       = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0;  // r
+            p[1]       = ((i - j) / 16) % 2 == 0 ? 255 : 0;       // g
+            p[2]       = ((i + j) / 16) % 2 == 0 ? 255 : 0;       // b
+            p[3]       = 255;                                     // a
+        }
+    }
+
+    // Upload texture data
+    wgpu::ImageCopyTexture destination;
+    destination.texture = texture;
+    destination.origin  = {0, 0, 0};
+    destination.aspect  = wgpu::TextureAspect::All;
+
+    wgpu::TextureDataLayout source;
+    source.offset       = 0;
+    source.bytesPerRow  = 4 * textureDesc.size.width;
+    source.rowsPerImage = textureDesc.size.height;
+
+    queue.WriteTexture(&destination, pixels.data(), pixels.size(), &source, &textureDesc.size);
 }
 
 void Application::InitializeBuffers()
@@ -476,7 +523,7 @@ void Application::InitializeBuffers()
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometryFromObj("resources/mammoth.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
 
     if (!success)
     {
@@ -503,47 +550,33 @@ void Application::InitializeBuffers()
     uniformBuffer               = device.CreateBuffer(&bufferDesc);
 
     // Upload the initial value of the uniforms
-    // Option C: A different way of using GLM extensions
-    float angle1 = 2.0f;              // Rotate the object
-    float angle2 = 3.0f * PI / 4.0f;  // Rotate the view point
-    glm::vec3 focalPoint(0.0, 0.0, -1.0);
-
-    glm::mat4x4 S        = glm::scale(glm::mat4x4(1.0), glm::vec3(0.3f));
-    glm::mat4x4 T1       = glm::mat4x4(1.0);
-    glm::mat4x4 R1       = glm::rotate(glm::mat4x4(1.0), angle1, glm::vec3(0.0, 0.0, 1.0));
-    uniforms.modelMatrix = R1 * T1 * S;
-
-    glm::mat4x4 R2      = glm::rotate(glm::mat4x4(1.0), -angle2, glm::vec3(1.0, 0.0, 0.0));
-    glm::mat4x4 T2      = glm::translate(glm::mat4x4(1.0), -focalPoint);
-    uniforms.viewMatrix = T2 * R2;
-
-    float ratio               = 640.0f / 480.0f;
-    float focalLength         = 2.0;
-    float near                = 0.01f;
-    float far                 = 100.0f;
-    float divider             = 1 / (focalLength * (far - near));
-    float fov                 = 2 * glm::atan(1.0f / focalLength);
-    uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
-
-    uniforms.time  = 1.0f;
-    uniforms.color = {0.0f, 1.0f, 0.4f, 1.0f};
+    uniforms.modelMatrix      = glm::mat4x4(1.0);
+    uniforms.viewMatrix       = glm::scale(glm::mat4x4(1.0), glm::vec3(1.0f));
+    uniforms.projectionMatrix = glm::ortho(-1, 1, -1, 1, -1, 1);
+    uniforms.time             = 1.0f;
+    uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
+    uniforms.time             = 1.0f;
+    uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
     queue.WriteBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 }
 
 void Application::InitializeBindGroups()
 {
     // Create a binding
-    wgpu::BindGroupEntry binding {};
-    binding.binding = 0;
-    binding.buffer  = uniformBuffer;
-    binding.offset  = 0;
-    binding.size    = sizeof(MyUniforms);
+    std::vector<wgpu::BindGroupEntry> bindings(2);
+    bindings[0].binding = 0;
+    bindings[0].buffer  = uniformBuffer;
+    bindings[0].offset  = 0;
+    bindings[0].size    = sizeof(MyUniforms);
+
+    bindings[1].binding     = 1;
+    bindings[1].textureView = textureView;
 
     // A bind group contains one or multiple bindings
     wgpu::BindGroupDescriptor bindGroupDesc {};
     bindGroupDesc.layout     = bindGroupLayout;
-    bindGroupDesc.entryCount = 1;
-    bindGroupDesc.entries    = &binding;
+    bindGroupDesc.entryCount = static_cast<uint32_t>(bindings.size());
+    bindGroupDesc.entries    = bindings.data();
     bindGroup                = device.CreateBindGroup(&bindGroupDesc);
 }
 

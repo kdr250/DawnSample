@@ -75,6 +75,8 @@ private:
     wgpu::BindGroup bindGroup;
     wgpu::Texture depthTexture;
     wgpu::TextureView depthTextureView;
+    wgpu::Texture texture;
+    wgpu::TextureView textureView;
 
     MyUniforms uniforms;
 
