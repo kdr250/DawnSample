@@ -521,32 +521,70 @@ void Application::InitializePipeline()
     samplerDesc.maxAnisotropy = 1;
     sampler                   = device.CreateSampler(&samplerDesc);
 
-    // Create image data
-    std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
-    for (uint32_t i = 0; i < textureDesc.size.width; ++i)
-    {
-        for (uint32_t j = 0; j < textureDesc.size.height; ++j)
-        {
-            uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
-            p[0]       = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0;  // r
-            p[1]       = ((i - j) / 16) % 2 == 0 ? 255 : 0;       // g
-            p[2]       = ((i + j) / 16) % 2 == 0 ? 255 : 0;       // b
-            p[3]       = 255;                                     // a
-        }
-    }
-
-    // Upload texture data
+    // Create and upload texture data, one mip level at a time
     wgpu::ImageCopyTexture destination;
     destination.texture = texture;
     destination.origin  = {0, 0, 0};
     destination.aspect  = wgpu::TextureAspect::All;
 
     wgpu::TextureDataLayout source;
-    source.offset       = 0;
-    source.bytesPerRow  = 4 * textureDesc.size.width;
-    source.rowsPerImage = textureDesc.size.height;
+    source.offset = 0;
 
-    queue.WriteTexture(&destination, pixels.data(), pixels.size(), &source, &textureDesc.size);
+    wgpu::Extent3D mipLevelSize = textureDesc.size;
+    std::vector<uint8_t> previousLevelPixels;
+    for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level)
+    {
+        // Create image data
+        std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
+        for (uint32_t i = 0; i < mipLevelSize.width; ++i)
+        {
+            for (uint32_t j = 0; j < mipLevelSize.height; ++j)
+            {
+                uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
+                if (level == 0)
+                {
+                    p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0;  // r
+                    p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0;       // g
+                    p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0;       // b
+                }
+                else
+                {
+                    // Get the corresponding 4 pixels from the previous level
+                    uint8_t* p00 = &previousLevelPixels[4
+                                                        * ((2 * j + 0) * (2 * mipLevelSize.width)
+                                                           + (2 * i + 0))];
+                    uint8_t* p01 = &previousLevelPixels[4
+                                                        * ((2 * j + 0) * (2 * mipLevelSize.width)
+                                                           + (2 * i + 1))];
+                    uint8_t* p10 = &previousLevelPixels[4
+                                                        * ((2 * j + 1) * (2 * mipLevelSize.width)
+                                                           + (2 * i + 0))];
+                    uint8_t* p11 = &previousLevelPixels[4
+                                                        * ((2 * j + 1) * (2 * mipLevelSize.width)
+                                                           + (2 * i + 1))];
+                    // Average
+                    p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
+                    p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
+                    p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
+                }
+                p[3] = 255;  // a
+            }
+        }
+
+        // Change this to the current level
+        destination.mipLevel = level;
+
+        // Compute from the mip level size
+        source.bytesPerRow  = 4 * mipLevelSize.width;
+        source.rowsPerImage = mipLevelSize.height;
+
+        queue.WriteTexture(&destination, pixels.data(), pixels.size(), &source, &mipLevelSize);
+
+        // The size of the next mip level:
+        mipLevelSize.width /= 2;
+        mipLevelSize.height /= 2;
+        previousLevelPixels = std::move(pixels);
+    }
 }
 
 void Application::InitializeBuffers()
