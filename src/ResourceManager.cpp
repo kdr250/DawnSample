@@ -131,6 +131,11 @@ bool ResourceManager::LoadGeometryFromObj(const std::filesystem::path& path,
                 attrib.normals[3 * index.normal_index + 1],
             };
 
+            vertexData[offset + i].uv = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1 - attrib.texcoords[2 * index.texcoord_index + 1],
+            };
+
             vertexData[offset + i].color = {
                 attrib.colors[3 * index.vertex_index + 0],
                 attrib.colors[3 * index.vertex_index + 1],

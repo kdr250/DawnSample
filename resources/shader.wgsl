@@ -2,12 +2,14 @@ struct VertexInput {
     @location(0) position: vec3f,
     @location(1) normal: vec3f,
     @location(2) color: vec3f,
+    @location(3) uv: vec2f,
 };
 
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) color: vec3f,
     @location(1) normal: vec3f,
+    @location(2) uv: vec2f,
 };
 
 struct MyUniforms {
@@ -29,11 +31,13 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
     out.color = in.color;
     out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
+    out.uv = in.uv;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let color = textureLoad(gradientTexture, vec2<i32>(in.position.xy), 0).rgb;
+    let texelCoords = vec2i(in.uv * vec2f(textureDimensions(gradientTexture)));
+    let color = textureLoad(gradientTexture, texelCoords, 0).rgb;
     return vec4f(color, 1.0);
 }
