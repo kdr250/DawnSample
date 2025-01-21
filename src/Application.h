@@ -48,6 +48,10 @@ private:
 
     bool InitializeBindGroups();
 
+    bool InitializeGUI();
+    void TerminateGUI();
+    void UpdateGUI(wgpu::RenderPassEncoder renderPass);
+
     wgpu::TextureView GetNextSurfaceTextureView();
 
     void SetDefaultLimits(wgpu::Limits& limits) const;

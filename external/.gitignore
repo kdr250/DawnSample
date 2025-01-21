@@ -1,3 +1,7 @@
-# see https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_wgpu.cpp
+# see 
+# - https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_wgpu.cpp
+# - https://github.com/emscripten-core/emscripten/tree/main/system/include/webgpu
+# - https://github.com/webgpu-native/webgpu-headers/pull/413
+# - https://github.com/webgpu-native/webgpu-headers/pull/437
 imgui_impl_wgpu.h
 imgui_impl_wgpu.cpp

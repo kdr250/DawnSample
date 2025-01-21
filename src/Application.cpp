@@ -1,9 +1,10 @@
 #include "Application.h"
 
+#include <vector>
+
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_wgpu.h>
-#include <vector>
 
 #ifdef __EMSCRIPTEN__
     #include <emscripten.h>
@@ -21,11 +22,14 @@ bool Application::Initialize()
 {
     return InitializeWindowAndDevice() && InitializeDepthBuffer() && InitializePipeline()
            && InitializeTexture() && InitializeGeometry() && InitializeUniforms()
-           && InitializeBindGroups();
+           && InitializeBindGroups() && InitializeGUI();
 }
 
 void Application::Terminate()
 {
+    // Terminate GUI
+    TerminateGUI();
+
     // Terminate SDL
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -145,6 +149,9 @@ void Application::MainLoop()
     renderPass.SetVertexBuffer(0, pointBuffer, 0, pointBuffer.GetSize());
     renderPass.SetBindGroup(0, bindGroup, 0, nullptr);
     renderPass.Draw(indexCount, 1, 0, 0);
+
+    UpdateGUI(renderPass);
+
     renderPass.End();
 
     // Finally encode and submit the render pass
@@ -348,7 +355,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxBufferSize              = 150000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
-    requiredLimits.limits.maxBindGroups                   = 1;
+    requiredLimits.limits.maxBindGroups                   = 2;
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
     requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
@@ -604,6 +611,85 @@ bool Application::InitializeBindGroups()
     return bindGroup != nullptr;
 }
 
+bool Application::InitializeGUI()
+{
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::GetIO();
+
+    // Get the surface texture
+    wgpu::SurfaceTexture surfaceTexture;
+    surface.GetCurrentTexture(&surfaceTexture);
+    wgpu::TextureFormat format = surfaceTexture.texture.GetFormat();
+
+    // Describe multi-sampling pipeline
+    WGPUMultisampleState multiSampleState;
+    multiSampleState.count                  = 1;
+    multiSampleState.mask                   = ~0u;
+    multiSampleState.alphaToCoverageEnabled = false;
+
+    // Setup platform/Renderer backends
+    ImGui_ImplSDL2_InitForOther(window);
+    ImGui_ImplWGPU_InitInfo initInfo;
+    initInfo.Device                   = device.Get();
+    initInfo.DepthStencilFormat       = (WGPUTextureFormat)depthTextureFormat;
+    initInfo.RenderTargetFormat       = (WGPUTextureFormat)format;
+    initInfo.PipelineMultisampleState = multiSampleState;
+    initInfo.NumFramesInFlight        = 3;
+    ImGui_ImplWGPU_Init(&initInfo);
+    return true;
+}
+
+void Application::TerminateGUI()
+{
+    ImGui_ImplWGPU_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+}
+
+void Application::UpdateGUI(wgpu::RenderPassEncoder renderPass)
+{
+    // Start the Dear ImGui frame
+    ImGui_ImplWGPU_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+
+    // Build UI
+    static float f                  = 0.0f;
+    static int counter              = 0;
+    static bool show_demo_window    = true;
+    static bool show_another_window = false;
+    static ImVec4 clear_color       = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+    ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
+
+    ImGui::Text(
+        "This is some useful text.");  // Display some text (you can use a format strings too)
+    ImGui::Checkbox("Demo Window",
+                    &show_demo_window);  // Edit bools storing our window open/close state
+    ImGui::Checkbox("Another Window", &show_another_window);
+
+    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);  // Edit 1 float using a slider from 0.0f to 1.0f
+    ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
+
+    if (ImGui::Button(
+            "Button"))  // Buttons return true when clicked (most widgets return true when edited/activated)
+        counter++;
+    ImGui::SameLine();
+    ImGui::Text("counter = %d", counter);
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+                1000.0f / io.Framerate,
+                io.Framerate);
+    ImGui::End();
+
+    // Draw UI
+    ImGui::EndFrame();
+    ImGui::Render();
+    ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass.Get());
+}
+
 wgpu::TextureView Application::GetNextSurfaceTextureView()
 {
     // Get the surface texture
@@ -734,6 +820,12 @@ void Application::OnMouseMove()
 void Application::OnMouseButton(SDL_Event& event)
 {
     assert(event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP);
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantCaptureMouse)
+    {
+        return;
+    }
 
     static constexpr int LEFT_BUTTON = 1;
     if (!SDL_BUTTON(LEFT_BUTTON))

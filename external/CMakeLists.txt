@@ -1,10 +1,12 @@
-add_library(sdl2webgpu STATIC sdl2webgpu.mm)
+add_library(sdl2webgpu STATIC sdl2webgpu.mm imgui_impl_wgpu.cpp)
 target_include_directories(sdl2webgpu PUBLIC .)
 
 if (EMSCRIPTEN)
     set(USE_FLAGS "-s USE_WEBGPU=1 -s USE_SDL=2")
     set(CMAKE_CXX_FLAGS ${USE_FLAGS})
+    target_link_libraries(sdl2webgpu PUBLIC imgui::imgui)
 else()
+    add_compile_definitions(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
     target_link_libraries(sdl2webgpu PUBLIC SDL2::SDL2 dawn::webgpu_dawn imgui::imgui)
 endif()
 
