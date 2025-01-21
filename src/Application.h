@@ -34,11 +34,19 @@ public:
     bool IsRunning();
 
 private:
-    void InitializePipeline();
+    bool InitializeWindowAndDevice();
 
-    void InitializeBuffers();
+    bool InitializeDepthBuffer();
 
-    void InitializeBindGroups();
+    bool InitializePipeline();
+
+    bool InitializeTexture();
+
+    bool InitializeGeometry();
+
+    bool InitializeUniforms();
+
+    bool InitializeBindGroups();
 
     wgpu::TextureView GetNextSurfaceTextureView();
 
@@ -62,23 +70,24 @@ private:
 
     static_assert(sizeof(MyUniforms) % 16 == 0);
 
-    SDL_Window* window;
-    wgpu::Device device;
-    wgpu::Queue queue;
-    wgpu::Surface surface;
-    wgpu::RenderPipeline pipeline;
-    wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
-    wgpu::Buffer pointBuffer;
-    uint32_t indexCount;
-    wgpu::Buffer uniformBuffer;
-    wgpu::PipelineLayout layout;
-    wgpu::BindGroupLayout bindGroupLayout;
-    wgpu::BindGroup bindGroup;
-    wgpu::Texture depthTexture;
-    wgpu::TextureView depthTextureView;
-    wgpu::Texture texture;
-    wgpu::TextureView textureView = nullptr;
-    wgpu::Sampler sampler;
+    SDL_Window* window                     = nullptr;
+    wgpu::Device device                    = nullptr;
+    wgpu::Queue queue                      = nullptr;
+    wgpu::Surface surface                  = nullptr;
+    wgpu::RenderPipeline pipeline          = nullptr;
+    wgpu::TextureFormat surfaceFormat      = wgpu::TextureFormat::Undefined;
+    wgpu::Buffer pointBuffer               = nullptr;
+    uint32_t indexCount                    = 0;
+    wgpu::Buffer uniformBuffer             = nullptr;
+    wgpu::PipelineLayout layout            = nullptr;
+    wgpu::BindGroupLayout bindGroupLayout  = nullptr;
+    wgpu::BindGroup bindGroup              = nullptr;
+    wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+    wgpu::Texture depthTexture             = nullptr;
+    wgpu::TextureView depthTextureView     = nullptr;
+    wgpu::Texture texture                  = nullptr;
+    wgpu::TextureView textureView          = nullptr;
+    wgpu::Sampler sampler                  = nullptr;
 
     MyUniforms uniforms;
 

@@ -16,142 +16,9 @@ constexpr float PI = 3.14159265358979323846f;
 
 bool Application::Initialize()
 {
-    // Init SDL
-    SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("Dawn Sample",
-                              SDL_WINDOWPOS_UNDEFINED,
-                              SDL_WINDOWPOS_UNDEFINED,
-                              1024,
-                              768,
-                              0);
-
-    // Create instance
-#ifdef __EMSCRIPTEN__
-    wgpu::Instance instance = wgpu::CreateInstance(nullptr);
-#else
-    wgpu::InstanceDescriptor desc = {};
-    desc.nextInChain              = nullptr;
-
-    wgpu::DawnTogglesDescriptor toggles;
-    toggles.nextInChain         = nullptr;
-    toggles.sType               = wgpu::SType::DawnTogglesDescriptor;
-    toggles.disabledToggleCount = 0;
-    toggles.enabledToggleCount  = 1;
-    const char* toggleName      = "enable::immediate::error::handling";
-    toggles.enabledToggles      = &toggleName;
-
-    desc.nextInChain = &toggles;
-
-    wgpu::Instance instance = wgpu::CreateInstance(&desc);
-#endif
-    if (instance == nullptr)
-    {
-        SDL_Log("Instance creation failed!");
-        return false;
-    }
-
-    // Create WebGPU surface
-    surface = SDL_GetWGPUSurface(instance, window);
-
-    // Requesting Adapter
-    wgpu::RequestAdapterOptions adapterOptions = {};
-    adapterOptions.nextInChain                 = nullptr;
-    adapterOptions.compatibleSurface           = surface;
-    wgpu::Adapter adapter = WebGPUUtils::RequestAdapterSync(instance, &adapterOptions);
-
-    WebGPUUtils::InspectAdapter(adapter);
-
-    // Requesting Device
-    wgpu::DeviceDescriptor deviceDesc   = {};
-    deviceDesc.nextInChain              = nullptr;
-    deviceDesc.label                    = WebGPUUtils::GenerateString("My Device");
-    deviceDesc.requiredFeatureCount     = 0;
-    wgpu::RequiredLimits requiredLimits = GetRequiredLimits(adapter);
-    deviceDesc.requiredLimits           = &requiredLimits;
-    deviceDesc.defaultQueue.nextInChain = nullptr;
-    deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
-
-#ifdef __EMSCRIPTEN__
-    deviceDesc.deviceLostCallback =
-        [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-#else
-    auto deviceLostCallback = [](const wgpu::Device& device,
-                                 wgpu::DeviceLostReason reason,
-                                 const char* message,
-                                 void* /* userData */)
-    {
-        SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
-                                     deviceLostCallback,
-                                     (void*)nullptr);
-
-    auto uncapturedErrorCallback = [](const wgpu::Device& device,
-                                      wgpu::ErrorType type,
-                                      const char* message,
-                                      void* /* pUserData */)
-    {
-        SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-
-    deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback, (void*)nullptr);
-#endif
-
-    device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
-
-#ifdef __EMSCRIPTEN__
-    auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-    device.SetUncapturedErrorCallback(onDeviceError, (void*)nullptr);
-#endif
-
-    WebGPUUtils::InspectDevice(device);
-
-    queue = device.GetQueue();
-
-    surfaceFormat = WebGPUUtils::GetTextureFormat(surface, adapter);
-
-    // Configure the surface
-    wgpu::SurfaceConfiguration config = {};
-    config.nextInChain                = nullptr;
-    config.width                      = 1024;
-    config.height                     = 768;
-    config.usage                      = wgpu::TextureUsage::RenderAttachment;
-    config.format                     = surfaceFormat;
-    config.viewFormatCount            = 0;
-    config.viewFormats                = nullptr;
-    config.device                     = device;
-    config.presentMode                = wgpu::PresentMode::Fifo;
-    config.alphaMode                  = wgpu::CompositeAlphaMode::Auto;
-
-    surface.Configure(&config);
-
-    InitializePipeline();
-    InitializeBuffers();
-    InitializeBindGroups();
-
-    return true;
+    return InitializeWindowAndDevice() && InitializeDepthBuffer() && InitializePipeline()
+           && InitializeTexture() && InitializeGeometry() && InitializeUniforms()
+           && InitializeBindGroups();
 }
 
 void Application::Terminate()
@@ -284,6 +151,172 @@ bool Application::IsRunning()
     return isRunning;
 }
 
+bool Application::InitializeWindowAndDevice()
+{
+    // Init SDL
+    SDL_Init(SDL_INIT_VIDEO);
+    window = SDL_CreateWindow("Dawn Sample",
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              1024,
+                              768,
+                              0);
+
+    // Create instance
+#ifdef __EMSCRIPTEN__
+    wgpu::Instance instance = wgpu::CreateInstance(nullptr);
+#else
+    wgpu::InstanceDescriptor desc = {};
+    desc.nextInChain              = nullptr;
+
+    wgpu::DawnTogglesDescriptor toggles;
+    toggles.nextInChain         = nullptr;
+    toggles.sType               = wgpu::SType::DawnTogglesDescriptor;
+    toggles.disabledToggleCount = 0;
+    toggles.enabledToggleCount  = 1;
+    const char* toggleName      = "enable::immediate::error::handling";
+    toggles.enabledToggles      = &toggleName;
+
+    desc.nextInChain = &toggles;
+
+    wgpu::Instance instance = wgpu::CreateInstance(&desc);
+#endif
+    if (instance == nullptr)
+    {
+        SDL_Log("Instance creation failed!");
+        return false;
+    }
+
+    // Create WebGPU surface
+    surface = SDL_GetWGPUSurface(instance, window);
+
+    // Requesting Adapter
+    wgpu::RequestAdapterOptions adapterOptions = {};
+    adapterOptions.nextInChain                 = nullptr;
+    adapterOptions.compatibleSurface           = surface;
+    wgpu::Adapter adapter = WebGPUUtils::RequestAdapterSync(instance, &adapterOptions);
+
+    WebGPUUtils::InspectAdapter(adapter);
+
+    // Requesting Device
+    wgpu::DeviceDescriptor deviceDesc   = {};
+    deviceDesc.nextInChain              = nullptr;
+    deviceDesc.label                    = WebGPUUtils::GenerateString("My Device");
+    deviceDesc.requiredFeatureCount     = 0;
+    wgpu::RequiredLimits requiredLimits = GetRequiredLimits(adapter);
+    deviceDesc.requiredLimits           = &requiredLimits;
+    deviceDesc.defaultQueue.nextInChain = nullptr;
+    deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
+
+#ifdef __EMSCRIPTEN__
+    deviceDesc.deviceLostCallback =
+        [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
+    {
+        SDL_Log("Device lost: reason 0x%08X", reason);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+#else
+    auto deviceLostCallback = [](const wgpu::Device& device,
+                                 wgpu::DeviceLostReason reason,
+                                 const char* message,
+                                 void* /* userData */)
+    {
+        SDL_Log("Device lost: reason 0x%08X", reason);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
+                                     deviceLostCallback,
+                                     (void*)nullptr);
+
+    auto uncapturedErrorCallback = [](const wgpu::Device& device,
+                                      wgpu::ErrorType type,
+                                      const char* message,
+                                      void* /* pUserData */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+
+    deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback, (void*)nullptr);
+#endif
+
+    device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
+
+#ifdef __EMSCRIPTEN__
+    auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */)
+    {
+        SDL_Log("Uncaptured device error: type 0x%08X", type);
+        if (message)
+        {
+            SDL_Log(" - message: %s", message);
+        }
+    };
+    device.SetUncapturedErrorCallback(onDeviceError, (void*)nullptr);
+#endif
+
+    WebGPUUtils::InspectDevice(device);
+
+    queue = device.GetQueue();
+
+    surfaceFormat = WebGPUUtils::GetTextureFormat(surface, adapter);
+
+    // Configure the surface
+    wgpu::SurfaceConfiguration config = {};
+    config.nextInChain                = nullptr;
+    config.width                      = 1024;
+    config.height                     = 768;
+    config.usage                      = wgpu::TextureUsage::RenderAttachment;
+    config.format                     = surfaceFormat;
+    config.viewFormatCount            = 0;
+    config.viewFormats                = nullptr;
+    config.device                     = device;
+    config.presentMode                = wgpu::PresentMode::Fifo;
+    config.alphaMode                  = wgpu::CompositeAlphaMode::Auto;
+
+    surface.Configure(&config);
+
+    return true;
+}
+
+bool Application::InitializeDepthBuffer()
+{
+    // Create the depth texture
+    wgpu::TextureDescriptor depthTextureDesc;
+    depthTextureDesc.dimension       = wgpu::TextureDimension::e2D;
+    depthTextureDesc.format          = depthTextureFormat;
+    depthTextureDesc.mipLevelCount   = 1;
+    depthTextureDesc.sampleCount     = 1;
+    depthTextureDesc.size            = {1024, 768, 1};
+    depthTextureDesc.usage           = wgpu::TextureUsage::RenderAttachment;
+    depthTextureDesc.viewFormatCount = 1;
+    depthTextureDesc.viewFormats     = (wgpu::TextureFormat*)&depthTextureFormat;
+    depthTexture                     = device.CreateTexture(&depthTextureDesc);
+
+    // Create the view of the depth texture manipulated by the rasterizer
+    wgpu::TextureViewDescriptor depthTextureViewDesc;
+    depthTextureViewDesc.nextInChain     = nullptr;
+    depthTextureViewDesc.label           = WebGPUUtils::GenerateString("Depth Texture");
+    depthTextureViewDesc.aspect          = wgpu::TextureAspect::DepthOnly;
+    depthTextureViewDesc.baseArrayLayer  = 0;
+    depthTextureViewDesc.arrayLayerCount = 1;
+    depthTextureViewDesc.baseMipLevel    = 0;
+    depthTextureViewDesc.mipLevelCount   = 1;
+    depthTextureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
+    depthTextureViewDesc.format          = depthTextureFormat;
+    depthTextureView                     = depthTexture.CreateView(&depthTextureViewDesc);
+
+    return depthTextureView != nullptr;
+}
+
 wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 {
     // Get adapter supported limits, in case we need them
@@ -323,7 +356,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     return requiredLimits;
 }
 
-void Application::InitializePipeline()
+bool Application::InitializePipeline()
 {
     // Load the shader module
     wgpu::ShaderModule shaderModule =
@@ -402,13 +435,12 @@ void Application::InitializePipeline()
     // Describe stencil/depth pipeline
     wgpu::DepthStencilState depthStencilState;
     SetDefaultDepthStencilState(depthStencilState);
-    depthStencilState.depthCompare         = wgpu::CompareFunction::Less;
-    depthStencilState.depthWriteEnabled    = true;
-    wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
-    depthStencilState.format               = depthTextureFormat;
-    depthStencilState.stencilReadMask      = 0;
-    depthStencilState.stencilWriteMask     = 0;
-    pipelineDesc.depthStencil              = &depthStencilState;
+    depthStencilState.depthCompare      = wgpu::CompareFunction::Less;
+    depthStencilState.depthWriteEnabled = true;
+    depthStencilState.format            = depthTextureFormat;
+    depthStencilState.stencilReadMask   = 0;
+    depthStencilState.stencilWriteMask  = 0;
+    pipelineDesc.depthStencil           = &depthStencilState;
 
     // Describe multi-sampling pipeline
     pipelineDesc.multisample.count                  = 1;
@@ -452,31 +484,11 @@ void Application::InitializePipeline()
 
     pipeline = device.CreateRenderPipeline(&pipelineDesc);
 
-    // Create the depth texture
-    wgpu::TextureDescriptor depthTextureDesc;
-    depthTextureDesc.dimension       = wgpu::TextureDimension::e2D;
-    depthTextureDesc.format          = depthTextureFormat;
-    depthTextureDesc.mipLevelCount   = 1;
-    depthTextureDesc.sampleCount     = 1;
-    depthTextureDesc.size            = {1024, 768, 1};
-    depthTextureDesc.usage           = wgpu::TextureUsage::RenderAttachment;
-    depthTextureDesc.viewFormatCount = 1;
-    depthTextureDesc.viewFormats     = (wgpu::TextureFormat*)&depthTextureFormat;
-    depthTexture                     = device.CreateTexture(&depthTextureDesc);
+    return pipeline != nullptr;
+}
 
-    // Create the view of the depth texture manipulated by the rasterizer
-    wgpu::TextureViewDescriptor depthTextureViewDesc;
-    depthTextureViewDesc.nextInChain     = nullptr;
-    depthTextureViewDesc.label           = WebGPUUtils::GenerateString("Depth Texture");
-    depthTextureViewDesc.aspect          = wgpu::TextureAspect::DepthOnly;
-    depthTextureViewDesc.baseArrayLayer  = 0;
-    depthTextureViewDesc.arrayLayerCount = 1;
-    depthTextureViewDesc.baseMipLevel    = 0;
-    depthTextureViewDesc.mipLevelCount   = 1;
-    depthTextureViewDesc.dimension       = wgpu::TextureViewDimension::e2D;
-    depthTextureViewDesc.format          = depthTextureFormat;
-    depthTextureView                     = depthTexture.CreateView(&depthTextureViewDesc);
-
+bool Application::InitializeTexture()
+{
     // Create a sampler
     wgpu::SamplerDescriptor samplerDesc;
     samplerDesc.addressModeU  = wgpu::AddressMode::Repeat;
@@ -497,11 +509,12 @@ void Application::InitializePipeline()
     if (!texture)
     {
         SDL_Log("Could not load texture!");
-        exit(EXIT_FAILURE);
+        return false;
     }
+    return true;
 }
 
-void Application::InitializeBuffers()
+bool Application::InitializeGeometry()
 {
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
@@ -526,7 +539,13 @@ void Application::InitializeBuffers()
 
     indexCount = static_cast<int>(vertexData.size());
 
+    return pointBuffer != nullptr;
+}
+
+bool Application::InitializeUniforms()
+{
     // Create uniform buffer
+    wgpu::BufferDescriptor bufferDesc {};
     bufferDesc.size             = sizeof(MyUniforms);
     bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
     bufferDesc.mappedAtCreation = false;
@@ -540,9 +559,11 @@ void Application::InitializeBuffers()
     uniforms.time             = 1.0f;
     uniforms.color            = {0.0f, 1.0f, 0.4f, 1.0f};
     queue.WriteBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+
+    return uniformBuffer != nullptr;
 }
 
-void Application::InitializeBindGroups()
+bool Application::InitializeBindGroups()
 {
     // Create a binding
     std::vector<wgpu::BindGroupEntry> bindings(3);
@@ -563,6 +584,8 @@ void Application::InitializeBindGroups()
     bindGroupDesc.entryCount = static_cast<uint32_t>(bindings.size());
     bindGroupDesc.entries    = bindings.data();
     bindGroup                = device.CreateBindGroup(&bindGroupDesc);
+
+    return bindGroup != nullptr;
 }
 
 wgpu::TextureView Application::GetNextSurfaceTextureView()
