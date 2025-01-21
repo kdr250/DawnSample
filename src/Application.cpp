@@ -1,5 +1,8 @@
 #include "Application.h"
 
+#include <imgui.h>
+#include <imgui_impl_sdl2.h>
+#include <imgui_impl_wgpu.h>
 #include <vector>
 
 #ifdef __EMSCRIPTEN__

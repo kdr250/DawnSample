@@ -5,7 +5,7 @@ if (EMSCRIPTEN)
     set(USE_FLAGS "-s USE_WEBGPU=1 -s USE_SDL=2")
     set(CMAKE_CXX_FLAGS ${USE_FLAGS})
 else()
-    target_link_libraries(sdl2webgpu PUBLIC SDL2::SDL2 dawn::webgpu_dawn)
+    target_link_libraries(sdl2webgpu PUBLIC SDL2::SDL2 dawn::webgpu_dawn imgui::imgui)
 endif()
 
 if (APPLE)
