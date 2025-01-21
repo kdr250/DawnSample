@@ -28,6 +28,7 @@ endif()
 find_package(glm CONFIG REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
@@ -58,6 +59,7 @@ if (EMSCRIPTEN)
         main PRIVATE
         glm::glm
         tinyobjloader::tinyobjloader
+        imgui::imgui
         sdl2webgpu
     )
 
@@ -72,6 +74,7 @@ else()
         $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
         glm::glm
         tinyobjloader::tinyobjloader
+        imgui::imgui
         sdl2webgpu
     )
 
