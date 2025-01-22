@@ -419,7 +419,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
     requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
-    requiredLimits.limits.maxInterStageShaderComponents = 8;
+    requiredLimits.limits.maxInterStageShaderComponents = 11;
 
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
@@ -702,6 +702,10 @@ void Application::UpdateGUI(wgpu::RenderPassEncoder renderPass)
         changed =
             ImGui::ColorEdit3("Color #1", glm::value_ptr(lightingUniforms.colors[1])) || changed;
         changed = ImGui::DragDirection("Direction #1", lightingUniforms.directions[1]) || changed;
+        changed =
+            ImGui::SliderFloat("Hardness", &lightingUniforms.hardness, 1.0f, 100.0f) || changed;
+        changed = ImGui::SliderFloat("K Diffuse", &lightingUniforms.kd, 0.0f, 1.0f) || changed;
+        changed = ImGui::SliderFloat("K Specular", &lightingUniforms.ks, 0.0f, 1.0f) || changed;
         ImGui::End();
         lightingUniformsChanged = changed;
     }
@@ -815,6 +819,12 @@ void Application::UpdateViewMatrix()
                       offsetof(MyUniforms, viewMatrix),
                       &uniforms.viewMatrix,
                       sizeof(MyUniforms::viewMatrix));
+
+    uniforms.cameraWorldPosition = position;
+    queue.WriteBuffer(uniformBuffer,
+                      offsetof(MyUniforms, cameraWorldPosition),
+                      &uniforms.cameraWorldPosition,
+                      sizeof(MyUniforms::cameraWorldPosition));
 }
 
 void Application::OnMouseMove()
