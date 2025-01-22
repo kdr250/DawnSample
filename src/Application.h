@@ -85,8 +85,8 @@ private:
         glm::mat4x4 viewMatrix;
         glm::mat4x4 modelMatrix;
         glm::vec4 color;
+        glm::vec3 cameraWorldPosition;
         float time;
-        float _padding[3];
     };
 
     static_assert(sizeof(MyUniforms) % 16 == 0);
@@ -95,6 +95,10 @@ private:
     {
         std::array<glm::vec4, 2> directions;
         std::array<glm::vec4, 2> colors;
+        float hardness = 32.0f;
+        float kd       = 1.0f;
+        float ks       = 0.5f;
+        float _pad[1];
     };
 
     static_assert(sizeof(LightingUniforms) % 16 == 0);
