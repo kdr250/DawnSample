@@ -84,6 +84,8 @@ void Application::MainLoop()
             default:
                 break;
         }
+
+        ImGui_ImplSDL2_ProcessEvent(&event);
     }
 
     const Uint8* state = SDL_GetKeyboardState(NULL);
