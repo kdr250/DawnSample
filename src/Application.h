@@ -7,8 +7,10 @@
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_LEFT_HANDED
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/ext.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtx/polar_coordinates.hpp>
 
 struct VertexAttributes
 {
@@ -38,6 +40,8 @@ private:
 
     bool InitializeDepthBuffer();
 
+    bool InitializeBindGroupLayout();
+
     bool InitializePipeline();
 
     bool InitializeTexture();
@@ -46,11 +50,11 @@ private:
 
     bool InitializeUniforms();
 
+    bool InitializeLightingUniforms();
+
     bool InitializeBindGroups();
 
     bool InitializeGUI();
-    void TerminateGUI();
-    void UpdateGUI(wgpu::RenderPassEncoder renderPass);
 
     wgpu::TextureView GetNextSurfaceTextureView();
 
@@ -68,6 +72,13 @@ private:
     void OnMouseButton(SDL_Event& event);
     void OnScroll(SDL_Event& event);
 
+    // Lighting
+    void UpdateLightingUniforms();
+
+    // GUI
+    void TerminateGUI();
+    void UpdateGUI(wgpu::RenderPassEncoder renderPass);
+
     struct MyUniforms
     {
         glm::mat4x4 projectionMatrix;
@@ -79,6 +90,14 @@ private:
     };
 
     static_assert(sizeof(MyUniforms) % 16 == 0);
+
+    struct LightingUniforms
+    {
+        std::array<glm::vec4, 2> directions;
+        std::array<glm::vec4, 2> colors;
+    };
+
+    static_assert(sizeof(LightingUniforms) % 16 == 0);
 
     struct CameraState
     {
@@ -117,6 +136,7 @@ private:
     wgpu::Buffer pointBuffer               = nullptr;
     uint32_t indexCount                    = 0;
     wgpu::Buffer uniformBuffer             = nullptr;
+    wgpu::Buffer lightingUniformBuffer     = nullptr;
     wgpu::PipelineLayout layout            = nullptr;
     wgpu::BindGroupLayout bindGroupLayout  = nullptr;
     wgpu::BindGroup bindGroup              = nullptr;
@@ -128,6 +148,8 @@ private:
     wgpu::Sampler sampler                  = nullptr;
 
     MyUniforms uniforms;
+    LightingUniforms lightingUniforms;
+    bool lightingUniformsChanged = true;
 
     CameraState cameraState;
     DragState dragState;

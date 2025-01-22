@@ -18,11 +18,23 @@
 
 constexpr float PI = 3.14159265358979323846f;
 
+namespace ImGui
+{
+    bool DragDirection(const char* label, glm::vec4& direction)
+    {
+        glm::vec2 angles = glm::degrees(glm::polar(glm::vec3(direction)));
+        bool changed     = ImGui::DragFloat2(label, glm::value_ptr(angles));
+        direction        = glm::vec4(glm::euclidean(glm::radians(angles)), direction.w);
+        return changed;
+    }
+}  // namespace ImGui
+
 bool Application::Initialize()
 {
-    return InitializeWindowAndDevice() && InitializeDepthBuffer() && InitializePipeline()
-           && InitializeTexture() && InitializeGeometry() && InitializeUniforms()
-           && InitializeBindGroups() && InitializeGUI();
+    return InitializeWindowAndDevice() && InitializeDepthBuffer() && InitializeBindGroupLayout()
+           && InitializePipeline() && InitializeTexture() && InitializeGeometry()
+           && InitializeUniforms() && InitializeLightingUniforms() && InitializeBindGroups()
+           && InitializeGUI();
 }
 
 void Application::Terminate()
@@ -90,6 +102,8 @@ void Application::MainLoop()
     tickCount   = SDL_GetTicks64();
 
     // Update uniform buffer
+    UpdateLightingUniforms();
+
     uniforms.time = tickCount / 1000.0f;
     queue.WriteBuffer(uniformBuffer,
                       offsetof(MyUniforms, time),
@@ -340,6 +354,50 @@ bool Application::InitializeDepthBuffer()
     return depthTextureView != nullptr;
 }
 
+bool Application::InitializeBindGroupLayout()
+{
+    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(4);
+
+    // The uniform buffer binding
+    wgpu::BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
+    SetDefaultBindGroupLayout(bindingLayout);
+    bindingLayout.binding               = 0;
+    bindingLayout.visibility            = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
+    bindingLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
+    bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+
+    // The texture binding
+    wgpu::BindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
+    SetDefaultBindGroupLayout(textureBindingLayout);
+    textureBindingLayout.binding               = 1;
+    textureBindingLayout.visibility            = wgpu::ShaderStage::Fragment;
+    textureBindingLayout.texture.sampleType    = wgpu::TextureSampleType::Float;
+    textureBindingLayout.texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
+    // The texture sampler binding
+    wgpu::BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
+    SetDefaultBindGroupLayout(samplerBindingLayout);
+    samplerBindingLayout.binding      = 2;
+    samplerBindingLayout.visibility   = wgpu::ShaderStage::Fragment;
+    samplerBindingLayout.sampler.type = wgpu::SamplerBindingType::Filtering;
+
+    // The lighting uniform buffer binding
+    wgpu::BindGroupLayoutEntry& lightingUniformLayout = bindingLayoutEntries[3];
+    SetDefaultBindGroupLayout(lightingUniformLayout);
+    lightingUniformLayout.binding               = 3;
+    lightingUniformLayout.visibility            = wgpu::ShaderStage::Fragment;
+    lightingUniformLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
+    lightingUniformLayout.buffer.minBindingSize = sizeof(LightingUniforms);
+
+    // Create a bind group layout
+    wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc {};
+    bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindingLayoutEntries.size());
+    bindGroupLayoutDesc.entries    = bindingLayoutEntries.data();
+    bindGroupLayout                = device.CreateBindGroupLayout(&bindGroupLayoutDesc);
+
+    return bindGroupLayout != nullptr;
+}
+
 wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 {
     // Get adapter supported limits, in case we need them
@@ -356,7 +414,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 
     requiredLimits.limits.maxBindGroups                   = 2;
-    requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+    requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
     requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
     requiredLimits.limits.maxInterStageShaderComponents = 8;
@@ -471,33 +529,6 @@ bool Application::InitializePipeline()
     pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
     // Describe pipeline layout
-    // Create a binding layout
-    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(3);
-    wgpu::BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
-    SetDefaultBindGroupLayout(bindingLayout);
-    bindingLayout.binding               = 0;
-    bindingLayout.visibility            = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-    bindingLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
-    bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
-    wgpu::BindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
-    SetDefaultBindGroupLayout(textureBindingLayout);
-    textureBindingLayout.binding                     = 1;
-    textureBindingLayout.visibility                  = wgpu::ShaderStage::Fragment;
-    textureBindingLayout.texture.sampleType          = wgpu::TextureSampleType::Float;
-    textureBindingLayout.texture.viewDimension       = wgpu::TextureViewDimension::e2D;
-    wgpu::BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
-    SetDefaultBindGroupLayout(samplerBindingLayout);
-    samplerBindingLayout.binding      = 2;
-    samplerBindingLayout.visibility   = wgpu::ShaderStage::Fragment;
-    samplerBindingLayout.sampler.type = wgpu::SamplerBindingType::Filtering;
-
-    // Create a bind group layout
-    wgpu::BindGroupLayoutDescriptor bindGroupLayoutDesc {};
-    bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindingLayoutEntries.size());
-    bindGroupLayoutDesc.entries    = bindingLayoutEntries.data();
-    bindGroupLayout                = device.CreateBindGroupLayout(&bindGroupLayoutDesc);
-
-    // Create pipeline layout
     wgpu::PipelineLayoutDescriptor layoutDesc {};
     layoutDesc.bindGroupLayoutCount = 1;
     layoutDesc.bindGroupLayouts     = (wgpu::BindGroupLayout*)&bindGroupLayout;
@@ -589,7 +620,7 @@ bool Application::InitializeUniforms()
 bool Application::InitializeBindGroups()
 {
     // Create a binding
-    std::vector<wgpu::BindGroupEntry> bindings(3);
+    std::vector<wgpu::BindGroupEntry> bindings(4);
     bindings[0].binding = 0;
     bindings[0].buffer  = uniformBuffer;
     bindings[0].offset  = 0;
@@ -600,6 +631,11 @@ bool Application::InitializeBindGroups()
 
     bindings[2].binding = 2;
     bindings[2].sampler = sampler;
+
+    bindings[3].binding = 3;
+    bindings[3].buffer  = lightingUniformBuffer;
+    bindings[3].offset  = 0;
+    bindings[3].size    = sizeof(LightingUniforms);
 
     // A bind group contains one or multiple bindings
     wgpu::BindGroupDescriptor bindGroupDesc {};
@@ -655,34 +691,18 @@ void Application::UpdateGUI(wgpu::RenderPassEncoder renderPass)
     ImGui::NewFrame();
 
     // Build UI
-    static float f                  = 0.0f;
-    static int counter              = 0;
-    static bool show_demo_window    = true;
-    static bool show_another_window = false;
-    static ImVec4 clear_color       = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
-    ImGui::Begin("Hello, world!");  // Create a window called "Hello, world!" and append into it.
-
-    ImGui::Text(
-        "This is some useful text.");  // Display some text (you can use a format strings too)
-    ImGui::Checkbox("Demo Window",
-                    &show_demo_window);  // Edit bools storing our window open/close state
-    ImGui::Checkbox("Another Window", &show_another_window);
-
-    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);  // Edit 1 float using a slider from 0.0f to 1.0f
-    ImGui::ColorEdit3("clear color", (float*)&clear_color);  // Edit 3 floats representing a color
-
-    if (ImGui::Button(
-            "Button"))  // Buttons return true when clicked (most widgets return true when edited/activated)
-        counter++;
-    ImGui::SameLine();
-    ImGui::Text("counter = %d", counter);
-
-    ImGuiIO& io = ImGui::GetIO();
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-                1000.0f / io.Framerate,
-                io.Framerate);
-    ImGui::End();
+    {
+        bool changed = false;
+        ImGui::Begin("Lighting");
+        changed =
+            ImGui::ColorEdit3("Color #0", glm::value_ptr(lightingUniforms.colors[0])) || changed;
+        changed = ImGui::DragDirection("Direction #0", lightingUniforms.directions[0]) || changed;
+        changed =
+            ImGui::ColorEdit3("Color #1", glm::value_ptr(lightingUniforms.colors[1])) || changed;
+        changed = ImGui::DragDirection("Direction #1", lightingUniforms.directions[1]) || changed;
+        ImGui::End();
+        lightingUniformsChanged = changed;
+    }
 
     // Draw UI
     ImGui::EndFrame();
@@ -855,6 +875,35 @@ void Application::OnScroll(SDL_Event& event)
     cameraState.zoom += dragState.scrollSensitivity * static_cast<float>(event.wheel.y);
     cameraState.zoom = glm::clamp(cameraState.zoom, -2.0f, 2.0f);
     UpdateViewMatrix();
+}
+
+bool Application::InitializeLightingUniforms()
+{
+    // Create uniform buffer
+    wgpu::BufferDescriptor bufferDesc;
+    bufferDesc.size             = sizeof(LightingUniforms);
+    bufferDesc.usage            = wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::Uniform;
+    bufferDesc.mappedAtCreation = false;
+    lightingUniformBuffer       = device.CreateBuffer(&bufferDesc);
+
+    // Initialize values
+    lightingUniforms.directions[0] = {0.5f, -0.9f, 0.1f, 0.0f};
+    lightingUniforms.directions[1] = {0.2f, 0.4f, 0.3f, 0.0f};
+    lightingUniforms.colors[0]     = {1.0f, 0.9f, 0.6f, 1.0f};
+    lightingUniforms.colors[1]     = {0.6f, 0.9f, 1.0f, 1.0f};
+
+    UpdateLightingUniforms();
+
+    return lightingUniformBuffer != nullptr;
+}
+
+void Application::UpdateLightingUniforms()
+{
+    if (lightingUniformsChanged)
+    {
+        queue.WriteBuffer(lightingUniformBuffer, 0, &lightingUniforms, sizeof(LightingUniforms));
+        lightingUniformsChanged = false;
+    }
 }
 
 void Application::SetDefaultLimits(wgpu::Limits& limits) const
