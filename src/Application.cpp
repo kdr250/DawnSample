@@ -837,7 +837,7 @@ void Application::OnMouseMove()
     int x = 0, y = 0;
     SDL_GetMouseState(&x, &y);
 
-    glm::vec2 currentMouse = glm::vec2(-(float)x, (float)y);
+    glm::vec2 currentMouse = glm::vec2((float)x, (float)y);
     glm::vec2 delta        = (currentMouse - dragState.startMouse) * dragState.sensitivity;
     cameraState.angles     = dragState.startCameraState.angles + delta;
     // Clamp to avoid going too far when orbitting up/down
