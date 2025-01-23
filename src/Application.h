@@ -147,8 +147,10 @@ private:
     wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
     wgpu::Texture depthTexture             = nullptr;
     wgpu::TextureView depthTextureView     = nullptr;
-    wgpu::Texture texture                  = nullptr;
-    wgpu::TextureView textureView          = nullptr;
+    wgpu::Texture baseColorTexture         = nullptr;
+    wgpu::TextureView baseColorTextureView = nullptr;
+    wgpu::Texture normalTexture            = nullptr;
+    wgpu::TextureView normalTextureView    = nullptr;
     wgpu::Sampler sampler                  = nullptr;
 
     MyUniforms uniforms;

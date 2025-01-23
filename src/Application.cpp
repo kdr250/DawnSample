@@ -358,7 +358,7 @@ bool Application::InitializeDepthBuffer()
 
 bool Application::InitializeBindGroupLayout()
 {
-    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(4);
+    std::vector<wgpu::BindGroupLayoutEntry> bindingLayoutEntries(5);
 
     // The uniform buffer binding
     wgpu::BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
@@ -376,17 +376,25 @@ bool Application::InitializeBindGroupLayout()
     textureBindingLayout.texture.sampleType    = wgpu::TextureSampleType::Float;
     textureBindingLayout.texture.viewDimension = wgpu::TextureViewDimension::e2D;
 
+    // The texture binding
+    wgpu::BindGroupLayoutEntry& normalTextureBindingLayout = bindingLayoutEntries[2];
+    SetDefaultBindGroupLayout(normalTextureBindingLayout);
+    normalTextureBindingLayout.binding               = 2;
+    normalTextureBindingLayout.visibility            = wgpu::ShaderStage::Fragment;
+    normalTextureBindingLayout.texture.sampleType    = wgpu::TextureSampleType::Float;
+    normalTextureBindingLayout.texture.viewDimension = wgpu::TextureViewDimension::e2D;
+
     // The texture sampler binding
-    wgpu::BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
+    wgpu::BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[3];
     SetDefaultBindGroupLayout(samplerBindingLayout);
-    samplerBindingLayout.binding      = 2;
+    samplerBindingLayout.binding      = 3;
     samplerBindingLayout.visibility   = wgpu::ShaderStage::Fragment;
     samplerBindingLayout.sampler.type = wgpu::SamplerBindingType::Filtering;
 
     // The lighting uniform buffer binding
-    wgpu::BindGroupLayoutEntry& lightingUniformLayout = bindingLayoutEntries[3];
+    wgpu::BindGroupLayoutEntry& lightingUniformLayout = bindingLayoutEntries[4];
     SetDefaultBindGroupLayout(lightingUniformLayout);
-    lightingUniformLayout.binding               = 3;
+    lightingUniformLayout.binding               = 4;
     lightingUniformLayout.visibility            = wgpu::ShaderStage::Fragment;
     lightingUniformLayout.buffer.type           = wgpu::BufferBindingType::Uniform;
     lightingUniformLayout.buffer.minBindingSize = sizeof(LightingUniforms);
@@ -428,7 +436,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxTextureDimension2D = 2048;
     requiredLimits.limits.maxTextureArrayLayers = 1;
 
-    requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
+    requiredLimits.limits.maxSampledTexturesPerShaderStage = 2;
     requiredLimits.limits.maxSamplersPerShaderStage        = 1;
 
     requiredLimits.limits.minUniformBufferOffsetAlignment =
@@ -560,9 +568,15 @@ bool Application::InitializeTexture()
     sampler                   = device.CreateSampler(&samplerDesc);
 
     // Create a texture
-    texture =
-        ResourceManager::LoadTexture("resources/fourareen2K_albedo.jpg", device, &textureView);
-    if (!texture)
+    baseColorTexture = ResourceManager::LoadTexture("resources/cobblestone_floor_08_diff_2k.jpg",
+                                                    device,
+                                                    &baseColorTextureView);
+
+    normalTexture = ResourceManager::LoadTexture("resources/cobblestone_floor_08_nor_gl_2k.png",
+                                                 device,
+                                                 &normalTextureView);
+
+    if (!baseColorTexture || !normalTexture)
     {
         SDL_Log("Could not load texture!");
         return false;
@@ -575,7 +589,7 @@ bool Application::InitializeGeometry()
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometryFromObj("resources/fourareen.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
 
     if (!success)
     {
@@ -622,22 +636,25 @@ bool Application::InitializeUniforms()
 bool Application::InitializeBindGroups()
 {
     // Create a binding
-    std::vector<wgpu::BindGroupEntry> bindings(4);
+    std::vector<wgpu::BindGroupEntry> bindings(5);
     bindings[0].binding = 0;
     bindings[0].buffer  = uniformBuffer;
     bindings[0].offset  = 0;
     bindings[0].size    = sizeof(MyUniforms);
 
     bindings[1].binding     = 1;
-    bindings[1].textureView = textureView;
+    bindings[1].textureView = baseColorTextureView;
 
-    bindings[2].binding = 2;
-    bindings[2].sampler = sampler;
+    bindings[2].binding     = 2;
+    bindings[2].textureView = normalTextureView;
 
     bindings[3].binding = 3;
-    bindings[3].buffer  = lightingUniformBuffer;
-    bindings[3].offset  = 0;
-    bindings[3].size    = sizeof(LightingUniforms);
+    bindings[3].sampler = sampler;
+
+    bindings[4].binding = 4;
+    bindings[4].buffer  = lightingUniformBuffer;
+    bindings[4].offset  = 0;
+    bindings[4].size    = sizeof(LightingUniforms);
 
     // A bind group contains one or multiple bindings
     wgpu::BindGroupDescriptor bindGroupDesc {};
