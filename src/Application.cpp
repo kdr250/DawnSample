@@ -418,7 +418,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     wgpu::RequiredLimits requiredLimits {};
     SetDefaultLimits(requiredLimits.limits);
 
-    requiredLimits.limits.maxVertexAttributes        = 4;
+    requiredLimits.limits.maxVertexAttributes        = 6;
     requiredLimits.limits.maxVertexBuffers           = 2;
     requiredLimits.limits.maxBufferSize              = 150000 * sizeof(VertexAttributes);
     requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
@@ -427,7 +427,7 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
     requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
-    requiredLimits.limits.maxInterStageShaderComponents = 11;
+    requiredLimits.limits.maxInterStageShaderComponents = 17;
 
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
@@ -465,19 +465,25 @@ bool Application::InitializePipeline()
 
     // Describe vertex pipeline
     wgpu::VertexBufferLayout vertexBufferLayout {};
-    std::vector<wgpu::VertexAttribute> vertexAttribs(4);
+    std::vector<wgpu::VertexAttribute> vertexAttribs(6);
     vertexAttribs[0].shaderLocation = 0;  // @location(0) position attribute
     vertexAttribs[0].format         = wgpu::VertexFormat::Float32x3;
     vertexAttribs[0].offset         = offsetof(VertexAttributes, position);
-    vertexAttribs[1].shaderLocation = 1;  // @location(1) normal attribute
+    vertexAttribs[1].shaderLocation = 1;  // @location(1) tangent attribute
     vertexAttribs[1].format         = wgpu::VertexFormat::Float32x3;
-    vertexAttribs[1].offset         = offsetof(VertexAttributes, normal);
-    vertexAttribs[2].shaderLocation = 2;  // @location(2) color attribute
+    vertexAttribs[1].offset         = offsetof(VertexAttributes, position);
+    vertexAttribs[2].shaderLocation = 2;  // @location(2) bitangent attribute
     vertexAttribs[2].format         = wgpu::VertexFormat::Float32x3;
-    vertexAttribs[2].offset         = offsetof(VertexAttributes, color);
-    vertexAttribs[3].shaderLocation = 3;  // @location(3) uv attribute
-    vertexAttribs[3].format         = wgpu::VertexFormat::Float32x2;
-    vertexAttribs[3].offset         = offsetof(VertexAttributes, uv);
+    vertexAttribs[2].offset         = offsetof(VertexAttributes, position);
+    vertexAttribs[3].shaderLocation = 3;  // @location(3) normal attribute
+    vertexAttribs[3].format         = wgpu::VertexFormat::Float32x3;
+    vertexAttribs[3].offset         = offsetof(VertexAttributes, normal);
+    vertexAttribs[4].shaderLocation = 4;  // @location(4) color attribute
+    vertexAttribs[4].format         = wgpu::VertexFormat::Float32x3;
+    vertexAttribs[4].offset         = offsetof(VertexAttributes, color);
+    vertexAttribs[5].shaderLocation = 5;  // @location(5) uv attribute
+    vertexAttribs[5].format         = wgpu::VertexFormat::Float32x2;
+    vertexAttribs[5].offset         = offsetof(VertexAttributes, uv);
 
     vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
     vertexBufferLayout.attributes     = vertexAttribs.data();
@@ -568,11 +574,11 @@ bool Application::InitializeTexture()
     sampler                   = device.CreateSampler(&samplerDesc);
 
     // Create a texture
-    baseColorTexture = ResourceManager::LoadTexture("resources/cobblestone_floor_08_diff_2k.jpg",
+    baseColorTexture = ResourceManager::LoadTexture("resources/fourareen2K_albedo.jpg",
                                                     device,
                                                     &baseColorTextureView);
 
-    normalTexture = ResourceManager::LoadTexture("resources/cobblestone_floor_08_nor_gl_2k.png",
+    normalTexture = ResourceManager::LoadTexture("resources/fourareen2K_normals.png",
                                                  device,
                                                  &normalTextureView);
 
@@ -589,7 +595,7 @@ bool Application::InitializeGeometry()
     // Load mesh data from OBJ file
     std::vector<VertexAttributes> vertexData;
 
-    bool success = ResourceManager::LoadGeometryFromObj("resources/plane.obj", vertexData);
+    bool success = ResourceManager::LoadGeometryFromObj("resources/fourareen.obj", vertexData);
 
     if (!success)
     {

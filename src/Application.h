@@ -15,7 +15,12 @@
 struct VertexAttributes
 {
     glm::vec3 position;
-    glm::vec3 normal;
+    // Texture mapping attributes represent the local frame in which
+    // normals sampled from the normal map are expressed.
+    glm::vec3 tangent;    // T = local X axis
+    glm::vec3 bitangent;  // B = local Y axis
+    glm::vec3 normal;     // N = local Z axis
+
     glm::vec3 color;
     glm::vec2 uv;
 };
