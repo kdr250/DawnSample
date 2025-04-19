@@ -882,8 +882,7 @@ void Application::OnMouseButton(SDL_Event& event)
         return;
     }
 
-    static constexpr int LEFT_BUTTON = 1;
-    if (!SDL_BUTTON(LEFT_BUTTON))
+    if (event.button.button != SDL_BUTTON_LEFT)
     {
         return;
     }
