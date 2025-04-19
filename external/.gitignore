@@ -5,3 +5,8 @@
 # - https://github.com/webgpu-native/webgpu-headers/pull/437
 imgui_impl_wgpu.h
 imgui_impl_wgpu.cpp
+
+# https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_sdl2.h
+# https://github.com/ocornut/imgui/blob/master/backends/imgui_impl_sdl2.cpp
+imgui_impl_sdl2.h
+imgui_impl_sdl2.cpp

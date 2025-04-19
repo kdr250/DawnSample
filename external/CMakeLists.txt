@@ -1,4 +1,4 @@
-add_library(sdl2webgpu STATIC sdl2webgpu.mm imgui_impl_wgpu.cpp)
+add_library(sdl2webgpu STATIC sdl2webgpu.mm imgui_impl_wgpu.cpp imgui_impl_sdl2.h imgui_impl_sdl2.cpp)
 target_include_directories(sdl2webgpu PUBLIC .)
 
 if (EMSCRIPTEN)
