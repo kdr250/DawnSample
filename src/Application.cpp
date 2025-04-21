@@ -427,8 +427,6 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
     requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
     requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
 
-    requiredLimits.limits.maxInterStageShaderComponents = 17;
-
     requiredLimits.limits.maxStorageBufferBindingSize =
         supportedLimits.limits.maxStorageBufferBindingSize;
 
@@ -963,7 +961,6 @@ void Application::SetDefaultLimits(wgpu::Limits& limits) const
     limits.maxBufferSize                             = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxVertexAttributes                       = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxVertexBufferArrayStride                = WGPU_LIMIT_U32_UNDEFINED;
-    limits.maxInterStageShaderComponents             = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxInterStageShaderVariables              = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxColorAttachments                       = WGPU_LIMIT_U32_UNDEFINED;
     limits.maxColorAttachmentBytesPerSample          = WGPU_LIMIT_U32_UNDEFINED;
