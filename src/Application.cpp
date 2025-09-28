@@ -238,11 +238,15 @@ bool Application::InitializeWindowAndDevice()
     WebGPUUtils::InspectAdapter(adapter);
 
     // Requesting Device
-    wgpu::DeviceDescriptor deviceDesc   = {};
-    deviceDesc.nextInChain              = nullptr;
-    deviceDesc.label                    = WebGPUUtils::GenerateString("My Device");
-    deviceDesc.requiredFeatureCount     = 0;
+    wgpu::DeviceDescriptor deviceDesc = {};
+    deviceDesc.nextInChain            = nullptr;
+    deviceDesc.label                  = WebGPUUtils::GenerateString("My Device");
+    deviceDesc.requiredFeatureCount   = 0;
+#ifdef __EMSCRIPTEN__
     wgpu::RequiredLimits requiredLimits = GetRequiredLimits(adapter);
+#else
+    wgpu::Limits requiredLimits = GetRequiredLimits(adapter);
+#endif
     deviceDesc.requiredLimits           = &requiredLimits;
     deviceDesc.defaultQueue.nextInChain = nullptr;
     deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
@@ -258,34 +262,29 @@ bool Application::InitializeWindowAndDevice()
         }
     };
 #else
-    auto deviceLostCallback = [](const wgpu::Device& device,
-                                 wgpu::DeviceLostReason reason,
-                                 const char* message,
-                                 void* /* userData */)
+    auto deviceLostCallback =
+        [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message)
     {
         SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message)
+        if (message.data)
         {
-            SDL_Log(" - message: %s", message);
+            SDL_Log(" - message: %s", message.data);
         }
     };
-    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous,
-                                     deviceLostCallback,
-                                     (void*)nullptr);
 
-    auto uncapturedErrorCallback = [](const wgpu::Device& device,
-                                      wgpu::ErrorType type,
-                                      const char* message,
-                                      void* /* pUserData */)
+    deviceDesc.SetDeviceLostCallback(wgpu::CallbackMode::AllowSpontaneous, deviceLostCallback);
+
+    auto uncapturedErrorCallback =
+        [](const wgpu::Device&, wgpu::ErrorType type, wgpu::StringView message)
     {
         SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message)
+        if (message.data)
         {
-            SDL_Log(" - message: %s", message);
+            SDL_Log(" - message: %s", message.data);
         }
     };
 
-    deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback, (void*)nullptr);
+    deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback);
 #endif
 
     device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
@@ -408,6 +407,7 @@ bool Application::InitializeBindGroupLayout()
     return bindGroupLayout != nullptr;
 }
 
+#ifdef __EMSCRIPTEN__
 wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 {
     // Get adapter supported limits, in case we need them
@@ -444,6 +444,43 @@ wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     return requiredLimits;
 }
+#else
+wgpu::Limits Application::GetRequiredLimits(wgpu::Adapter adapter) const
+{
+    // Get adapter supported limits, in case we need them
+    wgpu::Limits supportedLimits;
+    supportedLimits.nextInChain = nullptr;
+    adapter.GetLimits(&supportedLimits);
+
+    wgpu::Limits requiredLimits {};
+    SetDefaultLimits(requiredLimits);
+
+    requiredLimits.maxVertexAttributes        = 6;
+    requiredLimits.maxVertexBuffers           = 2;
+    requiredLimits.maxBufferSize              = 150000 * sizeof(VertexAttributes);
+    requiredLimits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
+
+    requiredLimits.maxBindGroups                   = 2;
+    requiredLimits.maxUniformBuffersPerShaderStage = 2;
+    requiredLimits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
+
+    requiredLimits.maxStorageBufferBindingSize = supportedLimits.maxStorageBufferBindingSize;
+
+    requiredLimits.maxTextureDimension1D = 2048;
+    requiredLimits.maxTextureDimension2D = 2048;
+    requiredLimits.maxTextureArrayLayers = 1;
+
+    requiredLimits.maxSampledTexturesPerShaderStage = 2;
+    requiredLimits.maxSamplersPerShaderStage        = 1;
+
+    requiredLimits.minUniformBufferOffsetAlignment =
+        supportedLimits.minUniformBufferOffsetAlignment;
+    requiredLimits.minStorageBufferOffsetAlignment =
+        supportedLimits.minStorageBufferOffsetAlignment;
+
+    return requiredLimits;
+}
+#endif
 
 bool Application::InitializePipeline()
 {
@@ -742,7 +779,12 @@ wgpu::TextureView Application::GetNextSurfaceTextureView()
     // Get the surface texture
     wgpu::SurfaceTexture surfaceTexture;
     surface.GetCurrentTexture(&surfaceTexture);
+#ifdef __EMSCRIPTEN__
     if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::Success)
+#else
+    if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal
+        && surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal)
+#endif
     {
         return nullptr;
     }

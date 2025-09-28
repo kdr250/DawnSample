@@ -64,7 +64,12 @@ private:
     wgpu::TextureView GetNextSurfaceTextureView();
 
     void SetDefaultLimits(wgpu::Limits& limits) const;
+
+#ifdef __EMSCRIPTEN__
     wgpu::RequiredLimits GetRequiredLimits(wgpu::Adapter adapter) const;
+#else
+    wgpu::Limits GetRequiredLimits(wgpu::Adapter adapter) const;
+#endif
 
     void SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingLayout);
 

@@ -294,14 +294,22 @@ void ResourceManager::WriteMipMaps(wgpu::Device device,
 {
     wgpu::Queue queue = device.GetQueue();
 
-    // Arguments telling which part of the texture we upload to
+// Arguments telling which part of the texture we upload to
+#ifdef __EMSCRIPTEN__
     wgpu::ImageCopyTexture destination;
+#else
+    wgpu::TexelCopyTextureInfo destination;
+#endif
     destination.texture = texture;
     destination.origin  = {0, 0, 0};
     destination.aspect  = wgpu::TextureAspect::All;
 
-    // Arguments telling how the C++ side pixel memory is laid out
+// Arguments telling how the C++ side pixel memory is laid out
+#ifdef __EMSCRIPTEN__
     wgpu::TextureDataLayout source;
+#else
+    wgpu::TexelCopyBufferLayout source;
+#endif
     source.offset = 0;
 
     // Create image data

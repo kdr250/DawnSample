@@ -176,17 +176,17 @@ void WebGPUUtils::InspectAdapter(wgpu::Adapter adapter)
     SDL_Log(" - adapterType: 0x%08X", properties.adapterType);
     SDL_Log(" - backendType: 0x%08X", properties.backendType);
 #else
-    wgpu::SupportedLimits supportedLimits = {};
-    supportedLimits.nextInChain           = nullptr;
+    wgpu::Limits supportedLimits = {};
+    supportedLimits.nextInChain  = nullptr;
 
     wgpu::Status status = adapter.GetLimits(&supportedLimits);
     if (status == wgpu::Status::Success)
     {
         SDL_Log("Adapter limits:");
-        SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.limits.maxTextureDimension1D);
-        SDL_Log(" - maxTextureDimension2D: %d", supportedLimits.limits.maxTextureDimension2D);
-        SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.limits.maxTextureDimension3D);
-        SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
+        SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.maxTextureDimension1D);
+        SDL_Log(" - maxTextureDimension2D: %d", supportedLimits.maxTextureDimension2D);
+        SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.maxTextureDimension3D);
+        SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.maxTextureArrayLayers);
     }
 
     wgpu::SupportedFeatures features;
@@ -265,17 +265,18 @@ void WebGPUUtils::InspectDevice(wgpu::Device device)
         SDL_Log(" - 0x%08X", feature);
     }
 
-    wgpu::SupportedLimits supportedLimits = {};
-    supportedLimits.nextInChain           = nullptr;
-    wgpu::Status status                   = device.GetLimits(&supportedLimits);
+    wgpu::Limits supportedLimits = {};
+    supportedLimits.nextInChain  = nullptr;
+    wgpu::Status status          = device.GetLimits(&supportedLimits);
 
     if (status == wgpu::Status::Success)
     {
         SDL_Log("Device limits:");
-        SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.limits.maxTextureDimension1D);
-        SDL_Log(" - maxTextureDimension2D: %d", supportedLimits.limits.maxTextureDimension2D);
-        SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.limits.maxTextureDimension3D);
-        SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.limits.maxTextureArrayLayers);
+
+        SDL_Log(" - maxTextureDimension1D: %d", supportedLimits.maxTextureDimension1D);
+        SDL_Log(" - maxTextureDimension2D: %d", supportedLimits.maxTextureDimension2D);
+        SDL_Log(" - maxTextureDimension3D: %d", supportedLimits.maxTextureDimension3D);
+        SDL_Log(" - maxTextureArrayLayers: %d", supportedLimits.maxTextureArrayLayers);
     }
 #endif
 }
