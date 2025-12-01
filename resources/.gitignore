@@ -2,3 +2,6 @@
 !*.txt
 !*.wgsl
 !.gitignore
+
+# see
+# https://github.com/eliemichel/LearnWebGPU-Code/tree/step110/resources
