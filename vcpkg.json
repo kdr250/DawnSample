@@ -1,10 +1,7 @@
 {
     "builtin-baseline": "2e6fcc44573d091af0321f99c89b212997a76f1f",
     "dependencies": [
-        {
-            "name": "dawn",
-            "platform": "!wasm32"
-        },
+        "dawn",
         {
             "name": "sdl2",
             "platform": "!wasm32"

@@ -20,7 +20,6 @@
 #ifdef __EMSCRIPTEN__
     #include <emscripten.h>
     #include <emscripten/html5.h>
-    #include <emscripten/html5_webgpu.h>
 #endif
 
 wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
@@ -148,9 +147,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 #endif
 #ifdef SDL_VIDEO_DRIVER_EMSCRIPTEN
     {
-        wgpu::SurfaceDescriptorFromCanvasHTMLSelector fromCanvasHTMLSelector;
-        fromCanvasHTMLSelector.nextInChain = nullptr;
-        fromCanvasHTMLSelector.sType = wgpu::SType::SurfaceDescriptorFromCanvasHTMLSelector;
+        wgpu::EmscriptenSurfaceSourceCanvasHTMLSelector fromCanvasHTMLSelector;
         fromCanvasHTMLSelector.selector   = "canvas";
 
         wgpu::SurfaceDescriptor surfaceDescriptor;

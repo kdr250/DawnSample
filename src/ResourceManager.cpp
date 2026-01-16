@@ -167,14 +167,10 @@ wgpu::ShaderModule ResourceManager::LoadShaderModule(const std::filesystem::path
     file.seekg(0);
     file.read(shaderSource.data(), size);
 
-    wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc {};
+    wgpu::ShaderSourceWGSL shaderCodeDesc {};
     shaderCodeDesc.nextInChain = nullptr;
-#ifdef __EMSCRIPTEN__
-    shaderCodeDesc.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
-#else
-    shaderCodeDesc.sType = wgpu::SType::ShaderSourceWGSL;
-#endif
-    shaderCodeDesc.code = WebGPUUtils::GenerateString(shaderSource.c_str());
+    shaderCodeDesc.sType       = wgpu::SType::ShaderSourceWGSL;
+    shaderCodeDesc.code        = WebGPUUtils::GenerateString(shaderSource.c_str());
 
     wgpu::ShaderModuleDescriptor shaderDesc {};
     shaderDesc.nextInChain = &shaderCodeDesc;
@@ -294,22 +290,14 @@ void ResourceManager::WriteMipMaps(wgpu::Device device,
 {
     wgpu::Queue queue = device.GetQueue();
 
-// Arguments telling which part of the texture we upload to
-#ifdef __EMSCRIPTEN__
-    wgpu::ImageCopyTexture destination;
-#else
+    // Arguments telling which part of the texture we upload to
     wgpu::TexelCopyTextureInfo destination;
-#endif
     destination.texture = texture;
     destination.origin  = {0, 0, 0};
     destination.aspect  = wgpu::TextureAspect::All;
 
-// Arguments telling how the C++ side pixel memory is laid out
-#ifdef __EMSCRIPTEN__
-    wgpu::TextureDataLayout source;
-#else
+    // Arguments telling how the C++ side pixel memory is laid out
     wgpu::TexelCopyBufferLayout source;
-#endif
     source.offset = 0;
 
     // Create image data

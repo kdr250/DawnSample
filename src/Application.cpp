@@ -9,7 +9,6 @@
 #ifdef __EMSCRIPTEN__
     #include <emscripten.h>
     #include <emscripten/html5.h>
-    #include <emscripten/html5_webgpu.h>
 #endif
 
 #include "ResourceManager.h"
@@ -242,26 +241,12 @@ bool Application::InitializeWindowAndDevice()
     deviceDesc.nextInChain            = nullptr;
     deviceDesc.label                  = WebGPUUtils::GenerateString("My Device");
     deviceDesc.requiredFeatureCount   = 0;
-#ifdef __EMSCRIPTEN__
-    wgpu::RequiredLimits requiredLimits = GetRequiredLimits(adapter);
-#else
-    wgpu::Limits requiredLimits = GetRequiredLimits(adapter);
-#endif
+
+    wgpu::Limits requiredLimits         = GetRequiredLimits(adapter);
     deviceDesc.requiredLimits           = &requiredLimits;
     deviceDesc.defaultQueue.nextInChain = nullptr;
     deviceDesc.defaultQueue.label       = WebGPUUtils::GenerateString("The default queue");
 
-#ifdef __EMSCRIPTEN__
-    deviceDesc.deviceLostCallback =
-        [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Device lost: reason 0x%08X", reason);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-#else
     auto deviceLostCallback =
         [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message)
     {
@@ -285,21 +270,8 @@ bool Application::InitializeWindowAndDevice()
     };
 
     deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback);
-#endif
 
     device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
-
-#ifdef __EMSCRIPTEN__
-    auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */)
-    {
-        SDL_Log("Uncaptured device error: type 0x%08X", type);
-        if (message)
-        {
-            SDL_Log(" - message: %s", message);
-        }
-    };
-    device.SetUncapturedErrorCallback(onDeviceError, (void*)nullptr);
-#endif
 
     WebGPUUtils::InspectDevice(device);
 
@@ -407,44 +379,6 @@ bool Application::InitializeBindGroupLayout()
     return bindGroupLayout != nullptr;
 }
 
-#ifdef __EMSCRIPTEN__
-wgpu::RequiredLimits Application::GetRequiredLimits(wgpu::Adapter adapter) const
-{
-    // Get adapter supported limits, in case we need them
-    wgpu::SupportedLimits supportedLimits;
-    supportedLimits.nextInChain = nullptr;
-    adapter.GetLimits(&supportedLimits);
-
-    wgpu::RequiredLimits requiredLimits {};
-    SetDefaultLimits(requiredLimits.limits);
-
-    requiredLimits.limits.maxVertexAttributes        = 6;
-    requiredLimits.limits.maxVertexBuffers           = 2;
-    requiredLimits.limits.maxBufferSize              = 150000 * sizeof(VertexAttributes);
-    requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
-
-    requiredLimits.limits.maxBindGroups                   = 2;
-    requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
-    requiredLimits.limits.maxUniformBufferBindingSize     = 16 * 4 * sizeof(float);
-
-    requiredLimits.limits.maxStorageBufferBindingSize =
-        supportedLimits.limits.maxStorageBufferBindingSize;
-
-    requiredLimits.limits.maxTextureDimension1D = 2048;
-    requiredLimits.limits.maxTextureDimension2D = 2048;
-    requiredLimits.limits.maxTextureArrayLayers = 1;
-
-    requiredLimits.limits.maxSampledTexturesPerShaderStage = 2;
-    requiredLimits.limits.maxSamplersPerShaderStage        = 1;
-
-    requiredLimits.limits.minUniformBufferOffsetAlignment =
-        supportedLimits.limits.minUniformBufferOffsetAlignment;
-    requiredLimits.limits.minStorageBufferOffsetAlignment =
-        supportedLimits.limits.minStorageBufferOffsetAlignment;
-
-    return requiredLimits;
-}
-#else
 wgpu::Limits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 {
     // Get adapter supported limits, in case we need them
@@ -480,7 +414,6 @@ wgpu::Limits Application::GetRequiredLimits(wgpu::Adapter adapter) const
 
     return requiredLimits;
 }
-#endif
 
 bool Application::InitializePipeline()
 {
@@ -779,12 +712,8 @@ wgpu::TextureView Application::GetNextSurfaceTextureView()
     // Get the surface texture
     wgpu::SurfaceTexture surfaceTexture;
     surface.GetCurrentTexture(&surfaceTexture);
-#ifdef __EMSCRIPTEN__
-    if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::Success)
-#else
     if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal
         && surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal)
-#endif
     {
         return nullptr;
     }
@@ -811,24 +740,6 @@ wgpu::TextureView Application::GetNextSurfaceTextureView()
 
 void Application::SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingLayout)
 {
-#ifdef __EMSCRIPTEN__
-    bindingLayout.buffer.nextInChain      = nullptr;
-    bindingLayout.buffer.type             = wgpu::BufferBindingType::Undefined;
-    bindingLayout.buffer.hasDynamicOffset = false;
-
-    bindingLayout.sampler.nextInChain = nullptr;
-    bindingLayout.sampler.type        = wgpu::SamplerBindingType::Undefined;
-
-    bindingLayout.storageTexture.nextInChain   = nullptr;
-    bindingLayout.storageTexture.access        = wgpu::StorageTextureAccess::Undefined;
-    bindingLayout.storageTexture.format        = wgpu::TextureFormat::Undefined;
-    bindingLayout.storageTexture.viewDimension = wgpu::TextureViewDimension::Undefined;
-
-    bindingLayout.texture.nextInChain   = nullptr;
-    bindingLayout.texture.multisampled  = false;
-    bindingLayout.texture.sampleType    = wgpu::TextureSampleType::Undefined;
-    bindingLayout.texture.viewDimension = wgpu::TextureViewDimension::Undefined;
-#else
     bindingLayout.buffer.nextInChain      = nullptr;
     bindingLayout.buffer.type             = wgpu::BufferBindingType::BindingNotUsed;
     bindingLayout.buffer.hasDynamicOffset = false;
@@ -845,7 +756,6 @@ void Application::SetDefaultBindGroupLayout(wgpu::BindGroupLayoutEntry& bindingL
     bindingLayout.texture.multisampled  = false;
     bindingLayout.texture.sampleType    = wgpu::TextureSampleType::BindingNotUsed;
     bindingLayout.texture.viewDimension = wgpu::TextureViewDimension::Undefined;
-#endif
 }
 
 void Application::SetDefaultStencilFaceState(wgpu::StencilFaceState& stencilFaceState)
