@@ -2,16 +2,13 @@ add_library(sdl2webgpu STATIC sdl2webgpu.mm imgui_impl_wgpu.cpp imgui_impl_sdl2.
 target_include_directories(sdl2webgpu PUBLIC .)
 
 if (EMSCRIPTEN)
-    set(USE_FLAGS "-s USE_SDL=2")
-    set(CMAKE_CXX_FLAGS ${USE_FLAGS})
-    target_link_libraries(sdl2webgpu PUBLIC dawn::webgpu_dawn imgui::imgui)
+    target_link_libraries(sdl2webgpu PUBLIC SDL2::SDL2 dawn::webgpu_dawn imgui::imgui)
 else()
     add_compile_definitions(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
     target_link_libraries(sdl2webgpu PUBLIC SDL2::SDL2 dawn::webgpu_dawn imgui::imgui)
 endif()
 
 if (APPLE)
-    # target_compile_options(sdl2webgpu PRIVATE -x objective-c)
     target_link_libraries(sdl2webgpu PRIVATE "-framework CoreVideo" "-framework IOKit" "-framework QuartzCore")
 
     if (IOS)

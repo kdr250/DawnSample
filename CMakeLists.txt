@@ -20,6 +20,11 @@ project(main VERSION 1.0)
 
 if (EMSCRIPTEN)
     set(VCPKG_TARGET_TRIPLET "wasm32-emscripten")
+
+    add_library(SDL2_SDL2 INTERFACE)
+    target_compile_options(SDL2_SDL2 INTERFACE -sUSE_SDL=2)
+    target_link_options(SDL2_SDL2 INTERFACE -sUSE_SDL=2)
+    add_library(SDL2::SDL2 ALIAS SDL2_SDL2)
 else()
     find_package(SDL2 CONFIG REQUIRED)
 endif()
@@ -50,7 +55,6 @@ if (EMSCRIPTEN)
 
     target_link_options(
         main PRIVATE
-        -sUSE_SDL=2
         -sASYNCIFY
         -sMIN_WEBGL_VERSION=2
         -sMAX_WEBGL_VERSION=2
@@ -65,6 +69,7 @@ if (EMSCRIPTEN)
 
     target_link_libraries(
         main PRIVATE
+        SDL2::SDL2
         dawn::webgpu_dawn
         glm::glm
         tinyobjloader::tinyobjloader
