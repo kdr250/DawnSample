@@ -48,8 +48,16 @@ add_executable(
 
 if (EMSCRIPTEN)
 
-    set(USE_FLAGS "-s USE_SDL=2 -s ASYNCIFY -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s ALLOW_MEMORY_GROWTH=1 --preload-file resources/")
-    set(CMAKE_CXX_FLAGS ${USE_FLAGS})
+    target_link_options(
+        main PRIVATE
+        -sUSE_SDL=2
+        -sASYNCIFY
+        -sMIN_WEBGL_VERSION=2
+        -sMAX_WEBGL_VERSION=2
+        -sALLOW_MEMORY_GROWTH=1
+        --preload-file resources/
+    )
+
     set_target_properties(main PROPERTIES SUFFIX ".js")
 
     file(COPY ${PROJECT_SOURCE_DIR}/resources DESTINATION ${CMAKE_BINARY_DIR})
