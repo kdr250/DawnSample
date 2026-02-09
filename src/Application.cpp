@@ -3,7 +3,7 @@
 #include <vector>
 
 #include <imgui.h>
-#include <imgui_impl_sdl2.h>
+#include <imgui_impl_sdl3.h>
 #include <imgui_impl_wgpu.h>
 
 #ifdef __EMSCRIPTEN__
@@ -13,7 +13,7 @@
 
 #include "ResourceManager.h"
 #include "WebGPUUtils.h"
-#include "sdl2webgpu.h"
+#include "sdl3webgpu.h"
 
 constexpr float PI = 3.14159265358979323846f;
 
@@ -63,20 +63,20 @@ void Application::MainLoop()
     {
         switch (event.type)
         {
-            case SDL_QUIT:
+            case SDL_EVENT_QUIT:
                 isRunning = false;
                 break;
 
-            case SDL_MOUSEMOTION:
+            case SDL_EVENT_MOUSE_MOTION:
                 OnMouseMove();
                 break;
 
-            case SDL_MOUSEWHEEL:
+            case SDL_EVENT_MOUSE_WHEEL:
                 OnScroll(event);
                 break;
 
-            case SDL_MOUSEBUTTONDOWN:
-            case SDL_MOUSEBUTTONUP:
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
                 OnMouseButton(event);
                 break;
 
@@ -84,10 +84,10 @@ void Application::MainLoop()
                 break;
         }
 
-        ImGui_ImplSDL2_ProcessEvent(&event);
+        ImGui_ImplSDL3_ProcessEvent(&event);
     }
 
-    const Uint8* state = SDL_GetKeyboardState(NULL);
+    const bool* state = SDL_GetKeyboardState(nullptr);
     if (state[SDL_SCANCODE_ESCAPE])
     {
         isRunning = false;
@@ -95,12 +95,12 @@ void Application::MainLoop()
 
 #ifndef __EMSCRIPTEN__
     // Wait until 16ms has elapsed since last frame
-    while (!SDL_TICKS_PASSED(SDL_GetTicks64(), tickCount + 16))
+    while (SDL_GetTicks() < tickCount + 16)
         ;
 #endif
-    float delta = (SDL_GetTicks64() - tickCount) / 1000.0f;
+    float delta = (SDL_GetTicks() - tickCount) / 1000.0f;
     deltaTime   = std::min(delta, 0.05f);
-    tickCount   = SDL_GetTicks64();
+    tickCount   = SDL_GetTicks();
 
     // Update uniform buffer
     UpdateLightingUniforms();
@@ -193,12 +193,7 @@ bool Application::InitializeWindowAndDevice()
 {
     // Init SDL
     SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("Dawn Sample",
-                              SDL_WINDOWPOS_UNDEFINED,
-                              SDL_WINDOWPOS_UNDEFINED,
-                              1024,
-                              768,
-                              0);
+    window = SDL_CreateWindow("Dawn Sample", 1024, 768, 0);
 
     // Create instance
 #ifdef __EMSCRIPTEN__
@@ -659,7 +654,7 @@ bool Application::InitializeGUI()
     multiSampleState.alphaToCoverageEnabled = false;
 
     // Setup platform/Renderer backends
-    ImGui_ImplSDL2_InitForOther(window);
+    ImGui_ImplSDL3_InitForOther(window);
     ImGui_ImplWGPU_InitInfo initInfo;
     initInfo.Device                   = device.Get();
     initInfo.DepthStencilFormat       = (WGPUTextureFormat)depthTextureFormat;
@@ -673,14 +668,14 @@ bool Application::InitializeGUI()
 void Application::TerminateGUI()
 {
     ImGui_ImplWGPU_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
 }
 
 void Application::UpdateGUI(wgpu::RenderPassEncoder renderPass)
 {
     // Start the Dear ImGui frame
     ImGui_ImplWGPU_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
     // Build UI
@@ -807,10 +802,10 @@ void Application::OnMouseMove()
         return;
     }
 
-    int x = 0, y = 0;
+    float x = 0, y = 0;
     SDL_GetMouseState(&x, &y);
 
-    glm::vec2 currentMouse = glm::vec2((float)x, (float)y);
+    glm::vec2 currentMouse = glm::vec2(x, y);
     glm::vec2 delta        = (currentMouse - dragState.startMouse) * dragState.sensitivity;
     cameraState.angles     = dragState.startCameraState.angles + delta;
     // Clamp to avoid going too far when orbitting up/down
@@ -824,7 +819,7 @@ void Application::OnMouseMove()
 
 void Application::OnMouseButton(SDL_Event& event)
 {
-    assert(event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP);
+    assert(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP);
 
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantCaptureMouse)
@@ -837,13 +832,13 @@ void Application::OnMouseButton(SDL_Event& event)
         return;
     }
 
-    bool isPressed = event.type == SDL_MOUSEBUTTONDOWN ? true : false;
+    bool isPressed = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? true : false;
     if (isPressed)
     {
         dragState.active = true;
-        int x = 0, y = 0;
+        float x = 0, y = 0;
         SDL_GetMouseState(&x, &y);
-        dragState.startMouse       = glm::vec2(-(float)x, (float)y);
+        dragState.startMouse       = glm::vec2(-x, y);
         dragState.startCameraState = cameraState;
     }
     else
@@ -854,7 +849,7 @@ void Application::OnMouseButton(SDL_Event& event)
 
 void Application::OnScroll(SDL_Event& event)
 {
-    assert(event.type == SDL_MOUSEWHEEL);
+    assert(event.type == SDL_EVENT_MOUSE_WHEEL);
 
     cameraState.zoom += dragState.scrollSensitivity * static_cast<float>(event.wheel.y);
     cameraState.zoom = glm::clamp(cameraState.zoom, -2.0f, 2.0f);

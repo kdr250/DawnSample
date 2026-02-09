@@ -21,12 +21,12 @@ project(main VERSION 1.0)
 if (EMSCRIPTEN)
     set(VCPKG_TARGET_TRIPLET "wasm32-emscripten")
 
-    add_library(SDL2_SDL2 INTERFACE)
-    target_compile_options(SDL2_SDL2 INTERFACE -sUSE_SDL=2)
-    target_link_options(SDL2_SDL2 INTERFACE -sUSE_SDL=2)
-    add_library(SDL2::SDL2 ALIAS SDL2_SDL2)
+    add_library(SDL3_SDL3 INTERFACE)
+    target_compile_options(SDL3_SDL3 INTERFACE -sUSE_SDL=3)
+    target_link_options(SDL3_SDL3 INTERFACE -sUSE_SDL=3)
+    add_library(SDL3::SDL3 ALIAS SDL3_SDL3)
 else()
-    find_package(SDL2 CONFIG REQUIRED)
+    find_package(SDL3 CONFIG REQUIRED)
 endif()
 
 find_package(Dawn REQUIRED)
@@ -42,7 +42,7 @@ add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>")
 
-add_subdirectory(external sdl2webgpu)
+add_subdirectory(external sdl3webgpu)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
@@ -69,12 +69,12 @@ if (EMSCRIPTEN)
 
     target_link_libraries(
         main PRIVATE
-        SDL2::SDL2
+        SDL3::SDL3
         dawn::webgpu_dawn
         glm::glm
         tinyobjloader::tinyobjloader
         imgui::imgui
-        sdl2webgpu
+        sdl3webgpu
     )
 
     target_include_directories(main PRIVATE ${Stb_INCLUDE_DIR})
@@ -84,12 +84,11 @@ else()
     target_link_libraries(
         main PRIVATE
         dawn::webgpu_dawn
-        $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
-        $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+        SDL3::SDL3
         glm::glm
         tinyobjloader::tinyobjloader
         imgui::imgui
-        sdl2webgpu
+        sdl3webgpu
     )
 
     target_include_directories(main PRIVATE ${Stb_INCLUDE_DIR})

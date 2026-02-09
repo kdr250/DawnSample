@@ -3,11 +3,16 @@
     "dependencies": [
         "dawn",
         {
-            "name": "sdl2",
+            "name": "sdl3",
             "platform": "!wasm32"
         },
+        {
+            "name": "imgui",
+            "features": [
+                "sdl3-binding"
+            ]
+        },
         "stb",
-        "imgui",
         "glm",
         "tinyobjloader"
     ]

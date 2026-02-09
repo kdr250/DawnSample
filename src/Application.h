@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <webgpu/webgpu_cpp.h>
 #include <array>
 #include <cassert>

@@ -1,6 +1,6 @@
 #include "WebGPUUtils.h"
 
-#include <SDL2/SDL_log.h>
+#include <SDL3/SDL_log.h>
 #include <cassert>
 #include <vector>
 
