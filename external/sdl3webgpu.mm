@@ -75,34 +75,34 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
         uint64_t x11_window = SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
         if (!x11_display || !x11_window) return nullptr;
 
-        WGPUSurfaceSourceXlibWindow fromXlibWindow;
-        fromXlibWindow.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
-        fromXlibWindow.chain.next = NULL;
+        wgpu::SurfaceSourceXlibWindow fromXlibWindow;
+        fromXlibWindow.sType       = wgpu::SType::SurfaceSourceXlibWindow;
+        fromXlibWindow.nextInChain = nullptr;
         fromXlibWindow.display = x11_display;
         fromXlibWindow.window = x11_window;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromXlibWindow.chain;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
+        surfaceDescriptor.nextInChain = &fromXlibWindow;
         surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
     else if (SDL_strcmp(SDL_GetCurrentVideoDriver(), "wayland") == 0) {
         void *wayland_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
         void *wayland_surface = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, NULL);
         if (!wayland_display || !wayland_surface) return nullptr;
 
-        WGPUSurfaceSourceWaylandSurface fromWaylandSurface;
-        fromWaylandSurface.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
-        fromWaylandSurface.chain.next = NULL;
+        wgpu::SurfaceSourceWaylandSurface fromWaylandSurface;
+        fromWaylandSurface.sType       = wgpu::SType::SurfaceSourceWaylandSurface;
+        fromWaylandSurface.nextInChain = nullptr;
         fromWaylandSurface.display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
         fromWaylandSurface.surface = wayland_surface;
 
-        WGPUSurfaceDescriptor surfaceDescriptor;
-        surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
+        wgpu::SurfaceDescriptor surfaceDescriptor;
+        surfaceDescriptor.nextInChain = &fromWaylandSurface;
         surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
 
-        return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+        return instance.CreateSurface(&surfaceDescriptor);
     }
 #endif
 #ifdef SDL_PLATFORM_WIN32
