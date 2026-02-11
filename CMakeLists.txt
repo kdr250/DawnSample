@@ -20,15 +20,9 @@ project(main VERSION 1.0)
 
 if (EMSCRIPTEN)
     set(VCPKG_TARGET_TRIPLET "wasm32-emscripten")
-
-    add_library(SDL3_SDL3 INTERFACE)
-    target_compile_options(SDL3_SDL3 INTERFACE -sUSE_SDL=3)
-    target_link_options(SDL3_SDL3 INTERFACE -sUSE_SDL=3)
-    add_library(SDL3::SDL3 ALIAS SDL3_SDL3)
-else()
-    find_package(SDL3 CONFIG REQUIRED)
 endif()
 
+find_package(SDL3 CONFIG REQUIRED)
 find_package(Dawn REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(tinyobjloader CONFIG REQUIRED)

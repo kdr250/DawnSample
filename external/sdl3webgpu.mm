@@ -39,7 +39,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromMetalLayer;
-        surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+        surfaceDescriptor.label = { NULL, WGPU_STRLEN };
 
         return instance.CreateSurface(&surfaceDescriptor);
     }
@@ -64,7 +64,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromMetalLayer;
-        surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+        surfaceDescriptor.label = { NULL, WGPU_STRLEN };
 
         return instance.CreateSurface(&surfaceDescriptor);
     }
@@ -83,7 +83,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromXlibWindow;
-        surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+        surfaceDescriptor.label = { NULL, WGPU_STRLEN };
 
         return instance.CreateSurface(&surfaceDescriptor);
     }
@@ -100,7 +100,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromWaylandSurface;
-        surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+        surfaceDescriptor.label = { NULL, WGPU_STRLEN };
 
         return instance.CreateSurface(&surfaceDescriptor);
     }
@@ -119,7 +119,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromWindowsHWND;
-        surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+        surfaceDescriptor.label = { NULL, WGPU_STRLEN };
 
         return instance.CreateSurface(&surfaceDescriptor);
     }
@@ -131,7 +131,7 @@ wgpu::Surface SDL_GetWGPUSurface(wgpu::Instance instance, SDL_Window* window)
 
         wgpu::SurfaceDescriptor surfaceDescriptor;
         surfaceDescriptor.nextInChain = &fromCanvasHTMLSelector;
-        surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+        surfaceDescriptor.label = { NULL, WGPU_STRLEN };
 
         return instance.CreateSurface(&surfaceDescriptor);
     }
