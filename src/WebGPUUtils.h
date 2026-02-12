@@ -39,19 +39,9 @@ namespace WebGPUUtils
      */
     wgpu::TextureFormat GetTextureFormat(wgpu::Surface surface, wgpu::Adapter adapter);
 
-    /**
-     * Helper function for const char* and wgpu::StringView
-     */
-#ifdef __EMSCRIPTEN__
-    inline const char* GenerateString(const char* str)
-    {
-        return str;
-    }
-#else
     inline wgpu::StringView GenerateString(const char* str)
     {
         return {str, strlen(str)};
     }
-#endif
 
 }  // namespace WebGPUUtils
