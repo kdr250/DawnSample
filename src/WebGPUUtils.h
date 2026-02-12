@@ -19,7 +19,9 @@ namespace WebGPUUtils
     /**
      * Utility function to get a WebGPU device
      */
-    wgpu::Device RequestDeviceSync(wgpu::Adapter adapter, wgpu::DeviceDescriptor const* descripter);
+    wgpu::Device RequestDeviceSync(wgpu::Instance instance,
+                                   wgpu::Adapter adapter,
+                                   wgpu::DeviceDescriptor const* descripter);
 
     /**
      * An example of how we can inspect the capabilities of the hardware through

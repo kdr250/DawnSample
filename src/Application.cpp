@@ -196,12 +196,13 @@ bool Application::InitializeWindowAndDevice()
     window = SDL_CreateWindow("Dawn Sample", 1024, 768, 0);
 
     // Create instance
-#ifdef __EMSCRIPTEN__
-    wgpu::Instance instance = wgpu::CreateInstance(nullptr);
-#else
-    wgpu::InstanceDescriptor desc = {};
-    desc.nextInChain              = nullptr;
+    static const auto kTimeoutWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+    wgpu::InstanceDescriptor desc     = {};
+    desc.nextInChain                  = nullptr;
+    desc.requiredFeatureCount         = 1;
+    desc.requiredFeatures             = &kTimeoutWaitAny;
 
+#ifndef __EMSCRIPTEN__
     wgpu::DawnTogglesDescriptor toggles;
     toggles.nextInChain         = nullptr;
     toggles.sType               = wgpu::SType::DawnTogglesDescriptor;
@@ -211,9 +212,10 @@ bool Application::InitializeWindowAndDevice()
     toggles.enabledToggles      = &toggleName;
 
     desc.nextInChain = &toggles;
+#endif
 
     wgpu::Instance instance = wgpu::CreateInstance(&desc);
-#endif
+
     if (instance == nullptr)
     {
         SDL_Log("Instance creation failed!");
@@ -266,7 +268,7 @@ bool Application::InitializeWindowAndDevice()
 
     deviceDesc.SetUncapturedErrorCallback(uncapturedErrorCallback);
 
-    device = WebGPUUtils::RequestDeviceSync(adapter, &deviceDesc);
+    device = WebGPUUtils::RequestDeviceSync(instance, adapter, &deviceDesc);
 
     WebGPUUtils::InspectDevice(device);
 

@@ -4,90 +4,60 @@
 #include <cassert>
 #include <vector>
 
+/**
+ * See:
+ * https://developer.chrome.com/docs/web-platform/webgpu/build-app?hl=ja#get_gpu_device
+ */
 wgpu::Adapter WebGPUUtils::RequestAdapterSync(wgpu::Instance instance,
                                               wgpu::RequestAdapterOptions const* options)
 {
-    struct UserData
-    {
-        wgpu::Adapter adapter = nullptr;
-        bool requestEnded     = false;
-    };
-    UserData userData;
+    wgpu::Adapter result = nullptr;
 
-    auto onAdapterRequestEnded = [](wgpu::RequestAdapterStatus status,
-                                    wgpu::Adapter adapter,
-                                    wgpu::StringView message,
-                                    UserData* pUserData)
-    {
-        if (status == wgpu::RequestAdapterStatus::Success)
-        {
-            pUserData->adapter = adapter;
-        }
-        else
-        {
-            SDL_Log("Could not get WebGPU adapter: %s", message.data);
-        }
-        pUserData->requestEnded = true;
-    };
+    wgpu::Future future =
+        instance.RequestAdapter(options,
+                                wgpu::CallbackMode::WaitAnyOnly,
+                                [&result](wgpu::RequestAdapterStatus status,
+                                          wgpu::Adapter adapter,
+                                          wgpu::StringView message)
+                                {
+                                    if (status != wgpu::RequestAdapterStatus::Success)
+                                    {
+                                        printf("Could not get WebGPU adapter: %s\n", message.data);
+                                        exit(1);
+                                    }
+                                    result = std::move(adapter);
+                                });
+    instance.WaitAny(future, UINT64_MAX);
 
-    instance.RequestAdapter(options,
-                            wgpu::CallbackMode::AllowSpontaneous,
-                            onAdapterRequestEnded,
-                            &userData);
-
-#ifdef __EMSCRIPTEN__
-    while (!userData.requestEnded)
-    {
-        emscripten_sleep(100);
-    }
-#endif
-
-    assert(userData.requestEnded);
-
-    return userData.adapter;
+    return result;
 }
 
-wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Adapter adapter,
+/**
+ * See:
+ * https://developer.chrome.com/docs/web-platform/webgpu/build-app?hl=ja#get_gpu_device
+ */
+wgpu::Device WebGPUUtils::RequestDeviceSync(wgpu::Instance instance,
+                                            wgpu::Adapter adapter,
                                             wgpu::DeviceDescriptor const* descripter)
 {
-    struct UserData
-    {
-        wgpu::Device device = nullptr;
-        bool requestEnded   = false;
-    };
-    UserData userData;
+    wgpu::Device result = nullptr;
 
-    auto onDeviceRequestEnded = [](wgpu::RequestDeviceStatus status,
-                                   wgpu::Device device,
-                                   wgpu::StringView message,
-                                   UserData* userData)
-    {
-        if (status == wgpu::RequestDeviceStatus::Success)
+    wgpu::Future future = adapter.RequestDevice(
+        descripter,
+        wgpu::CallbackMode::AllowSpontaneous,
+        [&result](wgpu::RequestDeviceStatus status, wgpu::Device device, wgpu::StringView message)
         {
-            userData->device = device;
-        }
-        else
-        {
-            SDL_Log("Could not get WebGPU device: %s", message.data);
-        }
-        userData->requestEnded = true;
-    };
+            if (status != wgpu::RequestDeviceStatus::Success)
+            {
+                printf("Could not get WebGPU device: %s\n", message.data);
+                exit(1);
+            }
+            result = std::move(device);
+        });
 
-    adapter.RequestDevice(descripter,
-                          wgpu::CallbackMode::AllowSpontaneous,
-                          onDeviceRequestEnded,
-                          &userData);
+    instance.WaitAny(future, UINT64_MAX);
 
-#ifdef __EMSCRIPTEN__
-    while (!userData.requestEnded)
-    {
-        emscripten_sleep(100);
-    }
-#endif
-
-    assert(userData.requestEnded);
-
-    return userData.device;
+    return result;
 }
 
 void WebGPUUtils::InspectAdapter(wgpu::Adapter adapter)
