@@ -1,11 +1,10 @@
-add_library(sdl3webgpu STATIC sdl3webgpu.mm imgui_impl_wgpu.cpp)
+add_library(sdl3webgpu STATIC sdl3webgpu.mm)
 target_include_directories(sdl3webgpu PUBLIC .)
 
 if (EMSCRIPTEN)
-    target_link_libraries(sdl3webgpu PUBLIC SDL3::SDL3 dawn::webgpu_dawn imgui::imgui)
+    target_link_libraries(sdl3webgpu PUBLIC SDL3::SDL3 dawn::webgpu_dawn)
 else()
-    add_compile_definitions(IMGUI_IMPL_WEBGPU_BACKEND_DAWN)
-    target_link_libraries(sdl3webgpu PUBLIC SDL3::SDL3 dawn::webgpu_dawn imgui::imgui)
+    target_link_libraries(sdl3webgpu PUBLIC SDL3::SDL3 dawn::webgpu_dawn)
 endif()
 
 if (APPLE)

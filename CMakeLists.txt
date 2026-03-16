@@ -53,6 +53,7 @@ if (EMSCRIPTEN)
         -sMIN_WEBGL_VERSION=2
         -sMAX_WEBGL_VERSION=2
         -sALLOW_MEMORY_GROWTH=1
+        --profiling-funcs
         --preload-file resources/
     )
 
